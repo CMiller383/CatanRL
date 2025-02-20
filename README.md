@@ -24,3 +24,6 @@ Coming soon
 
 ## License
 This project is licensed under the MIT License.
+
+## Credits
+GUI and headless implementation used and modified from https://github.com/henrycharlesworth/settlers_of_catan_RL
