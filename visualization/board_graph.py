@@ -24,9 +24,10 @@ def visualize_board(board: Board):
     # Annotate each hex with its resource and dice number.
     for hex_obj in board.hexes.values():
         rx, ry = rotate_point(hex_obj.center)
-        plt.text(rx, ry, f"{hex_obj.resource.name}\n{hex_obj.number}", 
+        plt.text(rx, ry, f"{hex_obj.resource.name}\n{hex_obj.number}\nHex ID: {hex_obj.hex_id}", 
                  horizontalalignment='center', verticalalignment='center', 
                  bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+        
     
     plt.title("Unique Catan Board")
     plt.axis('equal')
