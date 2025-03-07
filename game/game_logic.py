@@ -4,6 +4,7 @@ from .board import Board
 from .spot import SettlementType
 from .resource import Resource
 from .player import Player
+import random
 
 class GamePhase(Enum):
     SETUP_PHASE_1 = 0  # First settlement + road for each player
@@ -24,6 +25,9 @@ class GameLogic:
         self.setup_phase_settlement_placed = False  # Flag for tracking if settlement is placed in setup
         self.waiting_for_human_input = False  # Flag to track if we're waiting for human input
         self.last_settlement_placed = None  # Track last settlement for road placement
+        self.last_dice1_roll = None
+        self.last_dice2_roll = None
+        self.rolled_dice = False
         
         # Default all agents to random if not specified
         if agent_types is None:
@@ -33,13 +37,10 @@ class GameLogic:
         self._init_players(num_human_players, agent_types)
     
     def _init_players(self, num_human_players, agent_types):
-        # Create 4 players and add them to the board
-        colors = ["Red", "Blue", "White", "Orange"]
-        
+        # Create 4 players and add them to the board        
         # Create human players first
         for i in range(min(num_human_players, self.num_players)):
             player = Player(i+1, f"Player {i+1} (Human)")
-            player.color = colors[i]
             player.is_human = True
             self.players.append(player)
             self.board.add_player(i+1, f"Player {i+1}")
@@ -49,7 +50,6 @@ class GameLogic:
         for i in range(num_human_players, self.num_players):
             agent_type = agent_types[i - num_human_players]
             player = Player(i+1, f"Player {i+1} ({agent_type.name})")
-            player.color = colors[i]
             player.is_human = False
             self.players.append(player)
             self.board.add_player(i+1, f"Player {i+1}")
@@ -100,6 +100,72 @@ class GameLogic:
         
         return True
     
+    def roll_dice(self):
+        if self.current_phase != GamePhase.REGULAR_PLAY or self.rolled_dice:
+            print(self.rolled_dice)
+            return False
+        
+        self.last_dice1_roll = random.randint(1, 6)
+        self.last_dice2_roll = random.randint(1, 6)
+        self.rolled_dice = True
+        self.distribute_resources(self.last_dice1_roll + self.last_dice2_roll)
+        return True
+
+    def distribute_resources(self, dice_result):
+        for spot_id in self.board.spots:
+            spot = self.board.get_spot(spot_id)
+            if spot.player != None:
+                for hex_id in spot.adjacent_hex_ids:
+                    hex = self.board.get_hex(hex_id)
+                    if hex.number == dice_result:
+                        amount = 1
+                        if spot.settlement_type == SettlementType.CITY:
+                            amount = 2
+                        player = self.players[spot.player - 1]
+                        player.add_resource(hex.resource, amount)
+    
+    def user_can_end_turn(self):
+        if not (self.rolled_dice and self.current_phase == GamePhase.REGULAR_PLAY):
+            return False
+        
+        if not self.is_current_player_human():
+            return False
+        
+        return True
+        
+    def end_turn(self):
+        if not (self.rolled_dice and self.current_phase == GamePhase.REGULAR_PLAY):
+            return
+        
+        self.rolled_dice = False
+        self.current_player_idx = (self.current_player_idx + 1) % self.num_players
+
+    def upgrade_spot(self, spot_id):
+        curr_player = self.get_current_player()
+        spot = self.board.get_spot(spot_id)
+        
+        if spot.player != self.current_player_idx + 1:
+            print('not curr player')
+            return False
+        
+        # cant upgrade a spot with a city on it
+        if spot.settlement_type == SettlementType.CITY:
+            return False
+        
+        elif spot.settlement_type == SettlementType.SETTLEMENT:
+            # check if we have the resources
+            if curr_player.buy_city():
+                spot.build_settlement(curr_player.player_id, SettlementType.CITY)
+                return True
+            else:
+                print('missing resources')
+                return False
+        else:
+            # need logic here to check if we can build a settlement
+            return False
+        
+
+
     def place_initial_settlement(self, spot_id):
         """
         Place an initial settlement during setup phase
@@ -166,6 +232,7 @@ class GameLogic:
         if not self.is_valid_initial_road(road_id, last_settlement_id):
             return False
         
+        
         player = self.get_current_player()
         road = self.board.get_road(road_id)
         
@@ -174,6 +241,7 @@ class GameLogic:
         player.add_road(road_id)
         
         # Advance to next player or phase
+        print("advancing")
         self._advance_setup_phase()
         
         return True
@@ -182,33 +250,32 @@ class GameLogic:
         """Advance to the next player or phase in setup"""
         # Reset the settlement placement flag
         self.setup_phase_settlement_placed = False
+        self.rolled_dice = False
         
         if self.current_phase == GamePhase.SETUP_PHASE_1:
-            # Move to the next player
-            self.current_player_idx = (self.current_player_idx + 1) % self.num_players
-            
             # If we've gone through all players, switch to phase 2 (reverse order)
-            if self.current_player_idx == 0:
+            if self.current_player_idx == self.num_players - 1:
                 self.current_phase = GamePhase.SETUP_PHASE_2
-                self.current_player_idx = self.num_players - 1  # Start with the last player
-        
+            else:
+                print("incrementing")
+                self.current_player_idx += 1   
+
         elif self.current_phase == GamePhase.SETUP_PHASE_2:
-            # Move to the previous player (reverse order)
-            self.current_player_idx -= 1
-            
             # If we've gone through all players in reverse order
-            if self.current_player_idx < 0:
-                self.current_player_idx = 0  # Reset to first player for regular play
+            if self.current_player_idx == 0:
                 self.current_phase = GamePhase.REGULAR_PLAY
+            else: 
+                self.current_player_idx -= 1
+            
     
     def get_setup_instructions(self):
         """Get instructions for the current setup phase"""
         player = self.get_current_player()
         
         if not self.setup_phase_settlement_placed:
-            return f"{player.name} ({player.color}): Place your {'second' if self.current_phase == GamePhase.SETUP_PHASE_2 else 'first'} settlement"
+            return f"{player.name}: Place your {'second' if self.current_phase == GamePhase.SETUP_PHASE_2 else 'first'} settlement"
         else:
-            return f"{player.name} ({player.color}): Place a road connected to your settlement"
+            return f"{player.name}: Place a road connected to your settlement"
     
     def is_setup_complete(self):
         """Check if the setup phase is complete"""
@@ -246,5 +313,9 @@ class GameLogic:
                         return True  # Successfully processed the turn
         
         # Handle regular play phase (to be implemented)
-        
+        # we will need to handle knights later before this
+        self.roll_dice()
+        # we will then need to chose moves
+        self.end_turn()
+
         return False  # Turn not processed

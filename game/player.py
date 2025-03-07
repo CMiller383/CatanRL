@@ -18,5 +18,13 @@ class Player:
     def add_resource(self, resource: Resource, amount: int = 1):
         self.resources[resource] += amount
 
+    def buy_city(self):
+        if self.resources[Resource.WHEAT] >= 2 and self.resources[Resource.ORE] >= 3:
+            self.resources[Resource.WHEAT] -= 2
+            self.resources[Resource.ORE] -= 3
+            return True
+        else:
+            return False
+
     def __repr__(self):
         return f"Player(id={self.player_id}, name={self.name})"

@@ -1,3 +1,4 @@
+import os
 import pygame
 import math
 from game.board import Board
@@ -15,23 +16,30 @@ RESOURCE_COLORS = {
     Resource.DESERT: (244, 164, 96)    # Sandy Brown
 }
 
-PLAYER_COLORS = {
+PLAYER_COLOR_RGBS = {
     1: (255, 99, 71),    # Tomato Red
     2: (65, 105, 225),   # Royal Blue
     3: (255, 255, 255),  # White
     4: (138, 43, 226)    # Blue Violet
 }
+PLAYER_COLOR_NAMES = {
+    1: 'red',
+    2: 'blue',
+    3: 'white',
+    4: 'violet'
+}
 
-ROAD_COLOR = (160, 82, 45)           # Sienna
+ROAD_COLOR = (160, 82, 45)             # Sienna
 ROAD_HIGHLIGHT_COLOR = (255, 69, 0)    # Orange Red
-ROAD_INVALID_COLOR = (169, 169, 169)   # Dark Gray
+ROAD_INVALID_COLOR = (140, 140, 140)   # Dark Gray
+ROAD_VALID_COLOR = (200, 95, 55) 
 
 SPOT_COLOR = (255, 255, 255)           # White
-SPOT_HIGHLIGHT_COLOR = (255, 215, 0)   # Gold
-SPOT_INVALID_COLOR = (169, 169, 169)   # Dark Gray
 
 TEXT_COLOR = (0, 0, 0)                 # Black
 BACKGROUND_COLOR = (176, 224, 230)     # Powder Blue
+END_BUTTON_ENABLED_COLOR = (255, 0, 0)
+END_BUTTON_DISABLED_COLOR = (140, 0, 0)
 
 
 # Global screen proportion (how much of the screen to use)
@@ -53,7 +61,7 @@ class CatanGame:
             window_height = int(max_height * SCREEN_PROPORTION)
             
             # Ensure it's a square or landscape
-            window_width = max(window_width, window_height)
+            window_height = min(window_width, window_height)
         
         self.window_width = window_width
         self.window_height = window_height
@@ -97,8 +105,6 @@ class CatanGame:
         self.settlement_size = int(self.spot_radius * 1.5)
         
         # Game state
-        self.selected_spot = None
-        self.selected_road = None
         self.last_settlement_placed = None  # To track the most recent settlement for road placement
         
         # Calculate scale and offset to fit the board in the window
@@ -123,9 +129,63 @@ class CatanGame:
         self.settlement_size = int(self.spot_radius * 1.5)
         
         # Game state
-        self.selected_spot = None
-        self.selected_road = None
         self.last_settlement_placed = None  # To track the most recent settlement for road placement
+
+        self.load_images()
+
+    def load_images(self):
+        """Load and scale images for settlements and cities from their respective folders."""
+        self.settlement_images = {}
+        self.city_images = {}
+
+        # Define the target size based on the spot radius; adjust multiplier as needed.
+        img_size = self.spot_radius * 10
+
+        # Load settlement images
+        settlement_folder = 'assets/settlements'
+        for filename in os.listdir(settlement_folder):
+            if filename.endswith('.png'):
+                # For example, "red_settlement.png" becomes key "red"
+                key = filename.replace('_settlement.png', '')
+                image_path = os.path.join(settlement_folder, filename)
+                img = pygame.image.load(image_path).convert_alpha()
+                img = pygame.transform.smoothscale(img, (img_size, img_size))
+                self.settlement_images[key] = img
+
+        # Load city images
+        city_folder = 'assets/cities'
+        for filename in os.listdir(city_folder):
+            if filename.endswith('.png'):
+                key = filename.replace('_city.png', '')
+                image_path = os.path.join(city_folder, filename)
+                img = pygame.image.load(image_path).convert_alpha()
+                img = pygame.transform.smoothscale(img, (img_size, img_size))
+                self.city_images[key] = img
+
+        # sand border image
+        original = pygame.image.load('assets/border.png').convert_alpha()
+        border_size = int(self.window_height * 1.07)
+        self.border_image = pygame.transform.smoothscale(original, (border_size, border_size))
+
+        # dice image
+        self.dice_images = {}
+        dice_folder = 'assets/dice'
+        for i in range(1, 7):
+            filename = f"dice{i}.png"
+            path = os.path.join(dice_folder, filename)
+            img = pygame.image.load(path).convert_alpha()
+            # Scale the dice image; here we use 10% of the window width as the dice size.
+            dice_size = int(self.window_width * 0.1)
+            img = pygame.transform.smoothscale(img, (dice_size, dice_size))
+            self.dice_images[i] = img
+
+        # Also load the diceroll prompt image, if you want to show it separately
+        diceroll_path = os.path.join(dice_folder, "diceroll.png")
+        self.diceroll_image = pygame.image.load(diceroll_path).convert_alpha()
+        # Scale it as needed, for example 15% of the window width:
+        diceroll_size = int(self.window_width * 0.15)
+        self.diceroll_image = pygame.transform.smoothscale(self.diceroll_image, (diceroll_size, diceroll_size))
+        
     
     def compute_transform(self, margin=0.1):
         """Compute scale and offset to fit the board in the window"""
@@ -196,6 +256,49 @@ class CatanGame:
             
             self.hex_vertices[hex_id] = vertices
     
+    def draw_board_border(self):
+        """Draws the border image (assets/border.png) behind the board.
+        The image is scaled to a fraction of the window height and centered on hex 10.
+        """
+
+        # Use hex 10's screen position as the center of the board.
+        center = self.hex_centers.get(10)
+        if center is None:
+            return
+
+        # Get the rect of the scaled image and center it on the board.
+        border_rect = self.border_image.get_rect(center=center)
+        self.screen.blit(self.border_image, border_rect)
+
+    def draw_dice(self):
+        """Draw dice 1 and dice 2 on the bottom right of the screen."""
+        margin_x = self.window_width * .2
+        margin_y = 0
+
+        dice_size = self.dice_images[1].get_width()
+
+        # Compute positions for dice 1 and dice 2 based on the new offsets:
+        dice_x = self.window_width - margin_x - 2 * dice_size
+        dice_y = self.window_height - margin_y - dice_size
+
+        pos1 = (dice_x, dice_y)
+        pos2 = (dice_x + dice_size, dice_y)
+
+        
+        if self.game_logic.last_dice1_roll is not None:
+            dice_1_image = self.dice_images[self.game_logic.last_dice1_roll]
+            dice_2_image = self.dice_images[self.game_logic.last_dice2_roll]
+        else:
+            dice_1_image = self.dice_images[1]
+            dice_2_image = self.dice_images[1]
+        self.screen.blit(dice_1_image, pos1)
+        self.screen.blit(dice_2_image, pos2)
+            
+
+        # Save the dice area rectangle for click detection
+        self.dice_rect = pygame.Rect(dice_x, dice_y, 2 * dice_size, dice_size)
+
+    
     def draw_hexes(self):
         """Draw all hexagons with their resources and numbers"""
         for hex_id, hex_obj in self.board.hexes.items():
@@ -211,9 +314,12 @@ class CatanGame:
             vertical_spacing = self.number_circle_radius + 5
             
             # Draw the resource name (at the top)
+            # hiding for now
+            """
             resource_text = self.font.render(hex_obj.resource.name, True, TEXT_COLOR)
             resource_rect = resource_text.get_rect(center=(center[0], center[1] - vertical_spacing))
             self.screen.blit(resource_text, resource_rect)
+            """
             
             # Draw the number with a larger circle
             if hex_obj.number > 0:  # Desert has no number
@@ -231,9 +337,12 @@ class CatanGame:
                 self.screen.blit(number_text, number_rect)
             
             # Draw the hex ID (smaller, below number)
+            # hiding for now
+            """
             id_text = self.font.render(f"ID:{hex_id}", True, TEXT_COLOR)
             id_rect = id_text.get_rect(center=(center[0], center[1] + vertical_spacing))
             self.screen.blit(id_text, id_rect)
+            """
     
     def draw_roads(self):
         """Draw all roads"""
@@ -241,76 +350,59 @@ class CatanGame:
             start_pos, end_pos = road_info['endpoints']
             road = self.board.get_road(road_id)
             
+            color = ROAD_COLOR
             # If road is owned, draw with player color
             if road.owner is not None:
-                color = PLAYER_COLORS[road.owner]
+                color = PLAYER_COLOR_RGBS[road.owner]
+
             # In setup phase with settlement placed, check if road is valid
             elif self.game_logic.setup_phase_settlement_placed and self.last_settlement_placed is not None:
                 valid = self.game_logic.is_valid_initial_road(road_id, self.last_settlement_placed)
-                if road_id == self.selected_road:
-                    color = ROAD_HIGHLIGHT_COLOR
-                elif valid:
-                    color = ROAD_COLOR
-                else:
-                    color = ROAD_INVALID_COLOR
-            # Normal road
-            else:
-                color = ROAD_HIGHLIGHT_COLOR if road_id == self.selected_road else ROAD_COLOR
+                if valid:
+                    color = ROAD_VALID_COLOR
                 
             pygame.draw.line(self.screen, color, start_pos, end_pos, self.road_width)
     
     def draw_spots(self):
         """Draw all spots (vertices) with settlements if present"""
-        current_player = self.game_logic.get_current_player()
-        
         for spot_id, pos in self.spot_positions.items():
             spot = self.board.get_spot(spot_id)
             
             # Determine spot color based on state
             if spot.player is not None:
                 # If spot has a settlement, color it by player
-                player_color = PLAYER_COLORS[spot.player]
+                color_key = PLAYER_COLOR_NAMES[spot.player]
                 
-                # Draw settlement
+                # Select the appropriate image based on the settlement type
                 if spot.settlement_type == SettlementType.SETTLEMENT:
-                    # Draw a house shape
-                    house_points = [
-                        (pos[0], pos[1] - self.settlement_size),  # Top point
-                        (pos[0] - self.settlement_size, pos[1]),  # Bottom left
-                        (pos[0] + self.settlement_size, pos[1])   # Bottom right
-                    ]
-                    pygame.draw.polygon(self.screen, player_color, house_points)
-                    pygame.draw.polygon(self.screen, TEXT_COLOR, house_points, 2)  # Border
+                    img = self.settlement_images.get(color_key)
                 elif spot.settlement_type == SettlementType.CITY:
-                    # Draw a larger square for city (not used in setup phase)
-                    city_rect = pygame.Rect(
-                        pos[0] - self.settlement_size, 
-                        pos[1] - self.settlement_size,
-                        self.settlement_size * 2, 
-                        self.settlement_size * 2
-                    )
-                    pygame.draw.rect(self.screen, player_color, city_rect)
-                    pygame.draw.rect(self.screen, TEXT_COLOR, city_rect, 2)  # Border
-            else:
-                # Empty spot - determine if it's valid for placement in setup phase
-                if not self.game_logic.setup_phase_settlement_placed and not self.game_logic.is_setup_complete():
-                    valid = self.game_logic.is_valid_initial_settlement(spot_id)
-                    
-                    if spot_id == self.selected_spot:
-                        color = SPOT_HIGHLIGHT_COLOR
-                    elif valid:
-                        color = SPOT_COLOR
-                    else:
-                        color = SPOT_INVALID_COLOR
-                        
-                    pygame.draw.circle(self.screen, color, pos, self.spot_radius)
-                    pygame.draw.circle(self.screen, TEXT_COLOR, pos, self.spot_radius, 1)  # Border
-                    
-                    # Render spot ID
-                    spot_text = self.font.render(str(spot_id), True, TEXT_COLOR)
-                    spot_rect = spot_text.get_rect(center=pos)
-                    self.screen.blit(spot_text, spot_rect)
+                    img = self.city_images.get(color_key)
+                else:
+                    img = None
+                
+                if img:
+                    # Center the image on the spot position
+                    img_rect = img.get_rect(center=pos)
+                    self.screen.blit(img, img_rect)
+            else:   
+                color = SPOT_COLOR
+                pygame.draw.circle(self.screen, color, pos, self.spot_radius)
+                pygame.draw.circle(self.screen, TEXT_COLOR, pos, self.spot_radius, 1)  # Border
+
+                """
+                spot_text = self.font.render(str(spot_id), True, TEXT_COLOR)
+                spot_rect = spot_text.get_rect(center=pos)
+                self.screen.blit(spot_text, spot_rect)
+                """
     
+    def check_dice_click(self, mouse_pos):
+        """Return True if the mouse click is inside the dice area."""
+        if hasattr(self, 'dice_rect'):
+            return self.dice_rect.collidepoint(mouse_pos)
+        return False
+
+        
     def check_spot_click(self, mouse_pos):
         """Check if any spot was clicked"""
         for spot_id, pos in self.spot_positions.items():
@@ -366,7 +458,7 @@ class CatanGame:
         if not self.game_logic.is_setup_complete():
             instructions = self.game_logic.get_setup_instructions()
             current_player = self.game_logic.get_current_player()
-            player_color = PLAYER_COLORS[current_player.player_id]
+            player_color = PLAYER_COLOR_RGBS[current_player.player_id]
             
             # Render with player color - use smaller font for instructions in corner panel
             instruction_surface = self.info_font.render(instructions, True, player_color)
@@ -375,19 +467,7 @@ class CatanGame:
         else:
             # Regular play instructions (to be implemented)
             pass
-        
-        # Display selected element info (shortened)
-        if self.selected_spot is not None:
-            spot = self.board.spots[self.selected_spot]
-            info_text = f"Spot {self.selected_spot}"
-            text_surface = self.font.render(info_text, True, TEXT_COLOR)
-            self.screen.blit(text_surface, (x_offset, y_offset))
-        
-        elif self.selected_road is not None:
-            road = self.board.roads[self.selected_road]
-            info_text = f"Road {self.selected_road}: {road.spot1_id}-{road.spot2_id}"
-            text_surface = self.font.render(info_text, True, TEXT_COLOR)
-            self.screen.blit(text_surface, (x_offset, y_offset))
+
     
     def draw_end_turn_button(self):
         """Draw an end turn button in the bottom left corner"""
@@ -399,25 +479,12 @@ class CatanGame:
     
         # Create button rectangle
         self.end_turn_button = pygame.Rect(button_x, button_y, button_width, button_height)
-    
-        # Color based on whether it's a human player's turn and if an action is selected
-        if self.game_logic.is_current_player_human():
-            # Highlight button if a valid action is selected
-            if (not self.game_logic.is_setup_complete() and 
-                ((not self.game_logic.setup_phase_settlement_placed and self.selected_spot is not None) or
-                (self.game_logic.setup_phase_settlement_placed and self.selected_road is not None))):
-                button_color = PLAYER_COLORS[self.game_logic.get_current_player().player_id]
-            else:
-                # Dimmed color when no valid action is selected
-                base_color = PLAYER_COLORS[self.game_logic.get_current_player().player_id]
-                button_color = (max(base_color[0] - 50, 0), 
-                            max(base_color[1] - 50, 0), 
-                            max(base_color[2] - 50, 0))
+
+        if self.game_logic.user_can_end_turn():
+            color = END_BUTTON_ENABLED_COLOR
         else:
-            button_color = (150, 150, 150)  # Gray for AI turns
-    
-        # Draw button
-        pygame.draw.rect(self.screen, button_color, self.end_turn_button)
+            color = END_BUTTON_DISABLED_COLOR
+        pygame.draw.rect(self.screen, color, self.end_turn_button)
         pygame.draw.rect(self.screen, TEXT_COLOR, self.end_turn_button, 2)  # Border
     
         # Button text
@@ -447,7 +514,7 @@ class CatanGame:
         for player in self.players:
             # Player header with background in player's color
             player_rect = pygame.Rect(panel_x + 10, y_pos, panel_width - 20, 30)
-            pygame.draw.rect(self.screen, PLAYER_COLORS[player.player_id], player_rect)
+            pygame.draw.rect(self.screen, PLAYER_COLOR_RGBS[player.player_id], player_rect)
             pygame.draw.rect(self.screen, TEXT_COLOR, player_rect, 1)  # Border
             
             player_text = self.info_font.render(f"{player.name}", True, TEXT_COLOR)
@@ -457,7 +524,7 @@ class CatanGame:
             
             # Mark current player
             if player.player_id == self.game_logic.get_current_player().player_id:
-                current_text = self.font.render("CURRENT TURN", True, PLAYER_COLORS[player.player_id])
+                current_text = self.font.render("CURRENT TURN", True, PLAYER_COLOR_RGBS[player.player_id])
                 self.screen.blit(current_text, (panel_x + 15, y_pos))
                 y_pos += 25
             
@@ -494,7 +561,7 @@ class CatanGame:
 
     def check_end_turn_button(self, mouse_pos):
         """Check if the end turn button was clicked"""
-        if hasattr(self, 'end_turn_button') and self.end_turn_button.collidepoint(mouse_pos):
+        if hasattr(self, 'end_turn_button') and self.end_turn_button.collidepoint(mouse_pos) and self.game_logic.user_can_end_turn():
             return True
         return False
     
@@ -511,48 +578,49 @@ class CatanGame:
                         
                         # Check if end turn button was clicked
                         if self.check_end_turn_button(mouse_pos):
-                            self.handle_end_turn()
+                            self.game_logic.end_turn()
                             continue
                         
                         # Don't process clicks on the player panel area (right 20% of screen)
                         if mouse_pos[0] < self.window_width * 0.8:
-                            # In setup phase - handle selection of settlement and road
+                            # In placement phase - handle selection of two settlements and roads
                             if not self.game_logic.is_setup_complete():
                                 if not self.game_logic.setup_phase_settlement_placed:
-                                    # We need to select a settlement
+                                    # Attempt to place settlement immediately on click
                                     spot_id = self.check_spot_click(mouse_pos)
                                     if spot_id is not None:
-                                        # Only select the spot if it's valid for initial settlement
-                                        if self.game_logic.is_valid_initial_settlement(spot_id):
-                                            self.selected_spot = spot_id
-                                            self.selected_road = None
-                                            print(f"Selected Spot {spot_id}: {self.board.spots[spot_id]}")
+                                        print(self.game_logic.current_phase)
+                                        print(self.game_logic.current_player_idx)
+                                        successfully_placed = self.game_logic.place_initial_settlement(spot_id)
+                                        if successfully_placed:
+                                            print(f"Placed settlement at spot {spot_id}")
+                                            self.last_settlement_placed = spot_id
                                         else:
-                                            print(f"Invalid settlement location: {spot_id}")
+                                            print(f"Failed to place settlement at {spot_id}")
                                 else:
-                                    # We need to select a road
+                                    # Settlement already placed; attempt to place road immediately
                                     road_id = self.check_road_click(mouse_pos)
                                     if road_id is not None:
-                                        # Only select the road if it's valid for initial road
-                                        if self.game_logic.is_valid_initial_road(road_id, self.last_settlement_placed):
-                                            self.selected_road = road_id
-                                            self.selected_spot = None
-                                            print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
+                                        successfully_placed = self.game_logic.place_initial_road(road_id, self.last_settlement_placed)
+                                        if successfully_placed:
+                                            print(f"Placed road at {road_id}")
+                                            self.last_settlement_placed = None
                                         else:
-                                            print(f"Invalid road location: {road_id}")
+                                            print(f"Failed to place road at {road_id}")
+
                             else:
                                 # Regular play phase (to be implemented)
+                                if self.check_dice_click(mouse_pos):
+                                    self.game_logic.roll_dice()
+                                    continue
                                 spot_id = self.check_spot_click(mouse_pos)
                                 if spot_id is not None:
-                                    self.selected_spot = spot_id
-                                    self.selected_road = None
-                                    print(f"Selected Spot {spot_id}: {self.board.spots[spot_id]}")
-                                else:
-                                    road_id = self.check_road_click(mouse_pos)
-                                    if road_id is not None:
-                                        self.selected_road = road_id
-                                        self.selected_spot = None
-                                        print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
+                                    successfully_placed = self.game_logic.upgrade_spot(spot_id)
+                                    if successfully_placed:
+                                        print(f"Upgraded spot {spot_id}")
+                                    else:
+                                        print(f"Failed to upgrade spot {spot_id}")
+
             else:
                 # Handle AI player's turn with a slight delay
                 self.ai_thinking_timer += 1
@@ -568,58 +636,26 @@ class CatanGame:
                     
                     # Let the AI make its move
                     self.game_logic.process_ai_turn()
-                    
-                    # Clear selection after AI move
-                    self.selected_spot = None
-                    self.selected_road = None
             
             # Clear the screen
             self.screen.fill(BACKGROUND_COLOR)
             
             # Draw all elements
+            self.draw_board_border()
             self.draw_hexes()
             self.draw_roads()
             self.draw_spots()
-            self.draw_player_status()  # Draw player status panel
+            self.draw_player_status()
             self.display_info_panel()
-            self.draw_end_turn_button()  # Draw end turn button
-            
+            self.draw_end_turn_button()
+            self.draw_dice()
             # Update the display
             pygame.display.flip()
             self.clock.tick(60)
     
         pygame.quit()   
     
-    def handle_end_turn(self):
-        """Handle end turn button click"""
-        # In setup phase
-        if not self.game_logic.is_setup_complete():
-            if not self.game_logic.setup_phase_settlement_placed and self.selected_spot is not None:
-                # Try to place settlement
-                if self.game_logic.place_initial_settlement(self.selected_spot):
-                    print(f"Placed settlement at spot {self.selected_spot}")
-                    # Remember this spot for road placement
-                    self.last_settlement_placed = self.selected_spot
-                    self.game_logic.last_settlement_placed = self.selected_spot
-                    self.selected_spot = None
-            
-            elif self.game_logic.setup_phase_settlement_placed and self.selected_road is not None:
-                # Try to place road
-                if self.game_logic.place_initial_road(self.selected_road, self.last_settlement_placed):
-                    print(f"Placed road at {self.selected_road}")
-                    self.selected_road = None
-                    self.last_settlement_placed = None
-                    # End turn after placing both settlement and road
-                    self.game_logic._advance_setup_phase()
-        else:
-            # Regular play phase
-            # Here you would handle the various actions a player can take in the main game
-            # For now, just end the current player's turn
-            self.game_logic._advance_setup_phase()
-            
-            # Clear selections when ending turn
-            self.selected_spot = None
-            self.selected_road = None
+
 
 def display_player_setup_menu():
     """Display a menu to setup players and agent types"""
