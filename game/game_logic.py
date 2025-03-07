@@ -10,28 +10,50 @@ class GamePhase(Enum):
     SETUP_PHASE_2 = 1  # Second settlement + road for each player (reverse order)
     REGULAR_PLAY = 2   # Regular gameplay
 
+from agent.base import AgentType, create_agent
+
 class GameLogic:
-    def __init__(self, board):
+    def __init__(self, board, num_human_players=1, agent_types=None):
         self.board = board
         self.current_phase = GamePhase.SETUP_PHASE_1
         self.current_player_idx = 0
         self.num_players = 4  # Fixed at 4 players
         self.players = []
+        self.agents = []
         self.setup_turn_order = []  # For tracking setup phase
         self.setup_phase_settlement_placed = False  # Flag for tracking if settlement is placed in setup
-        self.last_turn_of_setup = False  # Flag for tracking if we're in the last turn of setup
+        self.waiting_for_human_input = False  # Flag to track if we're waiting for human input
+        self.last_settlement_placed = None  # Track last settlement for road placement
         
-        # Initialize players
-        self._init_players()
+        # Default all agents to random if not specified
+        if agent_types is None:
+            agent_types = [AgentType.RANDOM] * (self.num_players - num_human_players)
+        
+        # Initialize players and agents
+        self._init_players(num_human_players, agent_types)
     
-    def _init_players(self):
+    def _init_players(self, num_human_players, agent_types):
         # Create 4 players and add them to the board
         colors = ["Red", "Blue", "White", "Orange"]
-        for i in range(self.num_players):
-            player = Player(i+1, f"Player {i+1}")
+        
+        # Create human players first
+        for i in range(min(num_human_players, self.num_players)):
+            player = Player(i+1, f"Player {i+1} (Human)")
             player.color = colors[i]
+            player.is_human = True
             self.players.append(player)
             self.board.add_player(i+1, f"Player {i+1}")
+            self.agents.append(create_agent(i+1, AgentType.HUMAN))
+        
+        # Create AI players for remaining slots
+        for i in range(num_human_players, self.num_players):
+            agent_type = agent_types[i - num_human_players]
+            player = Player(i+1, f"Player {i+1} ({agent_type.name})")
+            player.color = colors[i]
+            player.is_human = False
+            self.players.append(player)
+            self.board.add_player(i+1, f"Player {i+1}")
+            self.agents.append(create_agent(i+1, agent_type))
         
         # Setup turn order for initial placement
         self.setup_turn_order = list(range(self.num_players))
@@ -39,6 +61,14 @@ class GameLogic:
     def get_current_player(self):
         """Returns the current player object"""
         return self.players[self.current_player_idx]
+    
+    def get_current_agent(self):
+        """Returns the current agent object"""
+        return self.agents[self.current_player_idx]
+    
+    def is_current_player_human(self):
+        """Check if current player is human"""
+        return self.players[self.current_player_idx].is_human
     
     def is_valid_initial_settlement(self, spot_id):
         """
@@ -91,6 +121,10 @@ class GameLogic:
         # If in second setup phase, give resources for adjacent hexes
         if self.current_phase == GamePhase.SETUP_PHASE_2:
             self._give_initial_resources(spot_id, player)
+            print(f"Giving resources to {player.name} for second settlement")
+            for resource, count in player.resources.items():
+                if count > 0:
+                    print(f"  - {resource.name}: {count}")
         
         return True
     
@@ -179,3 +213,38 @@ class GameLogic:
     def is_setup_complete(self):
         """Check if the setup phase is complete"""
         return self.current_phase == GamePhase.REGULAR_PLAY
+    
+    def process_ai_turn(self):
+        """Process a turn for an AI player"""
+        if self.is_current_player_human():
+            # Not an AI player, do nothing
+            self.waiting_for_human_input = True
+            return False
+        
+        # Get the current agent
+        agent = self.get_current_agent()
+        
+        # Handle the setup phase
+        if not self.is_setup_complete():
+            if not self.setup_phase_settlement_placed:
+                # AI needs to place a settlement
+                from agent.random_agent import RandomAgent
+                if isinstance(agent, RandomAgent):
+                    spot_id = agent.get_initial_settlement(self)
+                    if spot_id and self.place_initial_settlement(spot_id):
+                        self.last_settlement_placed = spot_id
+                        print(f"AI {self.get_current_player().name} placed settlement at spot {spot_id}")
+                        return True  # Successfully processed part of the turn
+            else:
+                # AI needs to place a road
+                from agent.random_agent import RandomAgent
+                if isinstance(agent, RandomAgent):
+                    road_id = agent.get_initial_road(self, self.last_settlement_placed)
+                    if road_id and self.place_initial_road(road_id, self.last_settlement_placed):
+                        print(f"AI {self.get_current_player().name} placed road at {road_id}")
+                        self.last_settlement_placed = None
+                        return True  # Successfully processed the turn
+        
+        # Handle regular play phase (to be implemented)
+        
+        return False  # Turn not processed

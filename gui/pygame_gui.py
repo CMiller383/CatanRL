@@ -5,37 +5,42 @@ from game.resource import Resource
 from game.spot import SettlementType
 from game.game_logic import GameLogic, GamePhase
 
-# Define colors
+
 RESOURCE_COLORS = {
-    Resource.WOOD: (34, 139, 34),    # Forest Green
-    Resource.BRICK: (178, 34, 34),   # Firebrick
-    Resource.WHEAT: (218, 165, 32),  # Goldenrod
-    Resource.SHEEP: (144, 238, 144), # Light Green
-    Resource.ORE: (105, 105, 105),   # Dim Gray
-    Resource.DESERT: (238, 232, 170) # Light Tan
+    Resource.WOOD: (60, 179, 113),    # Medium Sea Green
+    Resource.BRICK: (205, 92, 92),    # Indian Red
+    Resource.WHEAT: (255, 215, 0),     # Gold
+    Resource.SHEEP: (152, 251, 152),   # Pale Green
+    Resource.ORE: (169, 169, 169),     # Dark Gray
+    Resource.DESERT: (244, 164, 96)    # Sandy Brown
 }
 
 PLAYER_COLORS = {
-    1: (220, 20, 20),    # Red
-    2: (20, 20, 220),    # Blue
-    3: (220, 220, 220),  # White
-    4: (255, 140, 0)     # Orange
+    1: (255, 99, 71),    # Tomato Red
+    2: (65, 105, 225),   # Royal Blue
+    3: (255, 255, 255),  # White
+    4: (138, 43, 226)    # Blue Violet
 }
 
-ROAD_COLOR = (139, 69, 19)           # Brown
-ROAD_HIGHLIGHT_COLOR = (255, 140, 0) # Dark Orange
-ROAD_INVALID_COLOR = (150, 150, 150) # Gray
-SPOT_COLOR = (255, 255, 255)         # White
-SPOT_HIGHLIGHT_COLOR = (255, 255, 0) # Yellow
-SPOT_INVALID_COLOR = (150, 150, 150) # Gray
-TEXT_COLOR = (0, 0, 0)               # Black
-BACKGROUND_COLOR = (135, 206, 235)   # Sky Blue
+ROAD_COLOR = (160, 82, 45)           # Sienna
+ROAD_HIGHLIGHT_COLOR = (255, 69, 0)    # Orange Red
+ROAD_INVALID_COLOR = (169, 169, 169)   # Dark Gray
+
+SPOT_COLOR = (255, 255, 255)           # White
+SPOT_HIGHLIGHT_COLOR = (255, 215, 0)   # Gold
+SPOT_INVALID_COLOR = (169, 169, 169)   # Dark Gray
+
+TEXT_COLOR = (0, 0, 0)                 # Black
+BACKGROUND_COLOR = (176, 224, 230)     # Powder Blue
+
 
 # Global screen proportion (how much of the screen to use)
 SCREEN_PROPORTION = 0.75
 
+from agent.base import AgentType
+
 class CatanGame:
-    def __init__(self, window_width=None, window_height=None):
+    def __init__(self, window_width=None, window_height=None, num_human_players=1, agent_types=None):
         pygame.init()
         
         # Auto-detect screen size if not provided
@@ -65,9 +70,36 @@ class CatanGame:
         
         self.board = Board()
         
-        # Initialize game logic
-        self.game_logic = GameLogic(self.board)
+        # Initialize game logic with player setup
+        self.game_logic = GameLogic(self.board, num_human_players, agent_types)
         self.players = self.game_logic.players  # Reference to players for easier access
+        self.ai_thinking_timer = 0  # Timer to create a slight delay between AI moves
+        
+        # Calculate scale and offset to fit the board in the window
+        self.scale, self.offset = self.compute_transform()
+        
+        # Calculate positions for spots and roads
+        self.spot_positions = {}
+        self.calculate_spot_positions()
+        
+        self.road_positions = {}
+        self.calculate_road_positions()
+        
+        # Hex centers and vertices for drawing
+        self.hex_centers = {}
+        self.hex_vertices = {}
+        self.calculate_hex_positions()
+        
+        # Hit detection - scale these based on resolution
+        self.spot_radius = int(min(window_width, window_height) / 80)
+        self.road_width = int(min(window_width, window_height) / 100)
+        self.number_circle_radius = int(min(window_width, window_height) / 40)
+        self.settlement_size = int(self.spot_radius * 1.5)
+        
+        # Game state
+        self.selected_spot = None
+        self.selected_road = None
+        self.last_settlement_placed = None  # To track the most recent settlement for road placement
         
         # Calculate scale and offset to fit the board in the window
         self.scale, self.offset = self.compute_transform()
@@ -316,6 +348,83 @@ class CatanGame:
         
         return None
     
+    def display_info_panel(self):
+        """Display information panel in the top left corner"""
+        # Create a corner panel instead of full width
+        panel_width = int(self.window_width * 0.3)  # 30% of window width
+        panel_height = 80
+        panel_margin = 10
+        
+        panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel_surface.fill((255, 255, 255, 200))  # Semi-transparent white
+        self.screen.blit(panel_surface, (panel_margin, panel_margin))
+        
+        x_offset = panel_margin * 2
+        y_offset = panel_margin * 2
+        
+        # Display game phase instructions
+        if not self.game_logic.is_setup_complete():
+            instructions = self.game_logic.get_setup_instructions()
+            current_player = self.game_logic.get_current_player()
+            player_color = PLAYER_COLORS[current_player.player_id]
+            
+            # Render with player color - use smaller font for instructions in corner panel
+            instruction_surface = self.info_font.render(instructions, True, player_color)
+            self.screen.blit(instruction_surface, (x_offset, y_offset))
+            y_offset += 25
+        else:
+            # Regular play instructions (to be implemented)
+            pass
+        
+        # Display selected element info (shortened)
+        if self.selected_spot is not None:
+            spot = self.board.spots[self.selected_spot]
+            info_text = f"Spot {self.selected_spot}"
+            text_surface = self.font.render(info_text, True, TEXT_COLOR)
+            self.screen.blit(text_surface, (x_offset, y_offset))
+        
+        elif self.selected_road is not None:
+            road = self.board.roads[self.selected_road]
+            info_text = f"Road {self.selected_road}: {road.spot1_id}-{road.spot2_id}"
+            text_surface = self.font.render(info_text, True, TEXT_COLOR)
+            self.screen.blit(text_surface, (x_offset, y_offset))
+    
+    def draw_end_turn_button(self):
+        """Draw an end turn button in the bottom left corner"""
+        button_width = 150
+        button_height = 40
+        button_margin = 20
+        button_x = button_margin
+        button_y = self.window_height - button_height - button_margin
+    
+        # Create button rectangle
+        self.end_turn_button = pygame.Rect(button_x, button_y, button_width, button_height)
+    
+        # Color based on whether it's a human player's turn and if an action is selected
+        if self.game_logic.is_current_player_human():
+            # Highlight button if a valid action is selected
+            if (not self.game_logic.is_setup_complete() and 
+                ((not self.game_logic.setup_phase_settlement_placed and self.selected_spot is not None) or
+                (self.game_logic.setup_phase_settlement_placed and self.selected_road is not None))):
+                button_color = PLAYER_COLORS[self.game_logic.get_current_player().player_id]
+            else:
+                # Dimmed color when no valid action is selected
+                base_color = PLAYER_COLORS[self.game_logic.get_current_player().player_id]
+                button_color = (max(base_color[0] - 50, 0), 
+                            max(base_color[1] - 50, 0), 
+                            max(base_color[2] - 50, 0))
+        else:
+            button_color = (150, 150, 150)  # Gray for AI turns
+    
+        # Draw button
+        pygame.draw.rect(self.screen, button_color, self.end_turn_button)
+        pygame.draw.rect(self.screen, TEXT_COLOR, self.end_turn_button, 2)  # Border
+    
+        # Button text
+        button_text = self.info_font.render("End Turn", True, TEXT_COLOR)
+        text_rect = button_text.get_rect(center=self.end_turn_button.center)
+        self.screen.blit(button_text, text_rect)
+    
     def draw_player_status(self):
         """Draw player status panel on the right side of the screen"""
         panel_width = int(self.window_width * 0.2)  # 20% of screen width
@@ -383,110 +492,86 @@ class CatanGame:
             # Add spacing between players
             y_pos += 15
 
-    def display_info_panel(self):
-        """Display information panel in the top left corner"""
-        # Create a corner panel instead of full width
-        panel_width = int(self.window_width * 0.3)  # 30% of window width
-        panel_height = 80
-        panel_margin = 10
-        
-        panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
-        panel_surface.fill((255, 255, 255, 200))  # Semi-transparent white
-        self.screen.blit(panel_surface, (panel_margin, panel_margin))
-        
-        x_offset = panel_margin * 2
-        y_offset = panel_margin * 2
-        
-        # Display game phase instructions
-        if not self.game_logic.is_setup_complete():
-            instructions = self.game_logic.get_setup_instructions()
-            current_player = self.game_logic.get_current_player()
-            player_color = PLAYER_COLORS[current_player.player_id]
-            
-            # Render with player color - use smaller font for instructions in corner panel
-            instruction_surface = self.info_font.render(instructions, True, player_color)
-            self.screen.blit(instruction_surface, (x_offset, y_offset))
-            y_offset += 25
-        else:
-            # Regular play instructions (to be implemented)
-            pass
-        
-        # Display selected element info (shortened)
-        if self.selected_spot is not None:
-            spot = self.board.spots[self.selected_spot]
-            info_text = f"Spot {self.selected_spot} "
-            valid_text = "(Valid)" if self.game_logic.is_valid_initial_settlement(self.selected_spot) else "(Invalid)"
-            text_surface = self.font.render(info_text + valid_text, True, TEXT_COLOR)
-            self.screen.blit(text_surface, (x_offset, y_offset))
-        
-        elif self.selected_road is not None:
-            road = self.board.roads[self.selected_road]
-            info_text = f"Road {self.selected_road}: {road.spot1_id}-{road.spot2_id}"
-            valid_text = " (Valid)" if self.game_logic.is_valid_initial_road(self.selected_road, self.last_settlement_placed) else " (Invalid)"
-            text_surface = self.font.render(info_text + valid_text, True, TEXT_COLOR)
-            self.screen.blit(text_surface, (x_offset, y_offset))
+    def check_end_turn_button(self, mouse_pos):
+        """Check if the end turn button was clicked"""
+        if hasattr(self, 'end_turn_button') and self.end_turn_button.collidepoint(mouse_pos):
+            return True
+        return False
     
     def run(self):
-        """Main game loop"""
         running = True
         while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-                    mouse_pos = pygame.mouse.get_pos()
-                    
-                    # Don't process clicks on the player panel area (right 20% of screen)
-                    if mouse_pos[0] < self.window_width * 0.8:
-                        # In setup phase - handle settlement and road placement
-                        if not self.game_logic.is_setup_complete():
-                            if not self.game_logic.setup_phase_settlement_placed:
-                                # We need to place a settlement
+            # Process events for human players
+            if self.game_logic.is_current_player_human():
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                    elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
+                        mouse_pos = pygame.mouse.get_pos()
+                        
+                        # Check if end turn button was clicked
+                        if self.check_end_turn_button(mouse_pos):
+                            self.handle_end_turn()
+                            continue
+                        
+                        # Don't process clicks on the player panel area (right 20% of screen)
+                        if mouse_pos[0] < self.window_width * 0.8:
+                            # In setup phase - handle selection of settlement and road
+                            if not self.game_logic.is_setup_complete():
+                                if not self.game_logic.setup_phase_settlement_placed:
+                                    # We need to select a settlement
+                                    spot_id = self.check_spot_click(mouse_pos)
+                                    if spot_id is not None:
+                                        # Only select the spot if it's valid for initial settlement
+                                        if self.game_logic.is_valid_initial_settlement(spot_id):
+                                            self.selected_spot = spot_id
+                                            self.selected_road = None
+                                            print(f"Selected Spot {spot_id}: {self.board.spots[spot_id]}")
+                                        else:
+                                            print(f"Invalid settlement location: {spot_id}")
+                                else:
+                                    # We need to select a road
+                                    road_id = self.check_road_click(mouse_pos)
+                                    if road_id is not None:
+                                        # Only select the road if it's valid for initial road
+                                        if self.game_logic.is_valid_initial_road(road_id, self.last_settlement_placed):
+                                            self.selected_road = road_id
+                                            self.selected_spot = None
+                                            print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
+                                        else:
+                                            print(f"Invalid road location: {road_id}")
+                            else:
+                                # Regular play phase (to be implemented)
                                 spot_id = self.check_spot_click(mouse_pos)
                                 if spot_id is not None:
                                     self.selected_spot = spot_id
                                     self.selected_road = None
                                     print(f"Selected Spot {spot_id}: {self.board.spots[spot_id]}")
-                            else:
-                                # We need to place a road
-                                road_id = self.check_road_click(mouse_pos)
-                                if road_id is not None:
-                                    self.selected_road = road_id
-                                    self.selected_spot = None
-                                    print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
-                        else:
-                            # Regular play phase (to be implemented)
-                            spot_id = self.check_spot_click(mouse_pos)
-                            if spot_id is not None:
-                                self.selected_spot = spot_id
-                                self.selected_road = None
-                                print(f"Selected Spot {spot_id}: {self.board.spots[spot_id]}")
-                            else:
-                                road_id = self.check_road_click(mouse_pos)
-                                if road_id is not None:
-                                    self.selected_road = road_id
-                                    self.selected_spot = None
-                                    print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
+                                else:
+                                    road_id = self.check_road_click(mouse_pos)
+                                    if road_id is not None:
+                                        self.selected_road = road_id
+                                        self.selected_spot = None
+                                        print(f"Selected Road {road_id}: {self.board.roads[road_id]}")
+            else:
+                # Handle AI player's turn with a slight delay
+                self.ai_thinking_timer += 1
                 
-                elif event.type == pygame.KEYDOWN:
-                    # Confirm placement with Enter/Return key
-                    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
-                        if not self.game_logic.is_setup_complete():
-                            if not self.game_logic.setup_phase_settlement_placed and self.selected_spot is not None:
-                                # Try to place settlement
-                                if self.game_logic.place_initial_settlement(self.selected_spot):
-                                    print(f"Placed settlement at spot {self.selected_spot}")
-                                    # Remember this spot for road placement
-                                    self.last_settlement_placed = self.selected_spot
-                                    self.selected_spot = None
-                            
-                            elif self.game_logic.setup_phase_settlement_placed and self.selected_road is not None:
-                                # Try to place road
-                                if self.game_logic.place_initial_road(self.selected_road, self.last_settlement_placed):
-                                    print(f"Placed road at {self.selected_road}")
-                                    self.selected_road = None
-                        
-                        # In regular play phase (to be implemented)
+                # Process any quit events even during AI turns
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                
+                # Add a small delay to make AI turns visible (every 30 frames = 0.5 seconds at 60fps)
+                if self.ai_thinking_timer >= 30:
+                    self.ai_thinking_timer = 0
+                    
+                    # Let the AI make its move
+                    self.game_logic.process_ai_turn()
+                    
+                    # Clear selection after AI move
+                    self.selected_spot = None
+                    self.selected_road = None
             
             # Clear the screen
             self.screen.fill(BACKGROUND_COLOR)
@@ -497,21 +582,134 @@ class CatanGame:
             self.draw_spots()
             self.draw_player_status()  # Draw player status panel
             self.display_info_panel()
+            self.draw_end_turn_button()  # Draw end turn button
             
             # Update the display
             pygame.display.flip()
             self.clock.tick(60)
+    
+        pygame.quit()   
+    
+    def handle_end_turn(self):
+        """Handle end turn button click"""
+        # In setup phase
+        if not self.game_logic.is_setup_complete():
+            if not self.game_logic.setup_phase_settlement_placed and self.selected_spot is not None:
+                # Try to place settlement
+                if self.game_logic.place_initial_settlement(self.selected_spot):
+                    print(f"Placed settlement at spot {self.selected_spot}")
+                    # Remember this spot for road placement
+                    self.last_settlement_placed = self.selected_spot
+                    self.game_logic.last_settlement_placed = self.selected_spot
+                    self.selected_spot = None
+            
+            elif self.game_logic.setup_phase_settlement_placed and self.selected_road is not None:
+                # Try to place road
+                if self.game_logic.place_initial_road(self.selected_road, self.last_settlement_placed):
+                    print(f"Placed road at {self.selected_road}")
+                    self.selected_road = None
+                    self.last_settlement_placed = None
+                    # End turn after placing both settlement and road
+                    self.game_logic._advance_setup_phase()
+        else:
+            # Regular play phase
+            # Here you would handle the various actions a player can take in the main game
+            # For now, just end the current player's turn
+            self.game_logic._advance_setup_phase()
+            
+            # Clear selections when ending turn
+            self.selected_spot = None
+            self.selected_road = None
+
+def display_player_setup_menu():
+    """Display a menu to setup players and agent types"""
+    pygame.init()
+    screen = pygame.display.set_mode((600, 400))
+    pygame.display.set_caption("Catan Player Setup")
+    
+    font_title = pygame.font.SysFont('Arial', 32, bold=True)
+    font_text = pygame.font.SysFont('Arial', 22)
+    font_button = pygame.font.SysFont('Arial', 24, bold=True)
+    
+    # Default setup
+    num_human_players = 1
+    agent_types = [AgentType.RANDOM] * 3  # Default all AI to random
+    
+    # Start button
+    start_button = pygame.Rect(200, 320, 200, 50)
+    
+    running = True
+    
+    while running:
+        screen.fill((240, 240, 240))
         
-        pygame.quit()
+        # Title
+        title = font_title.render("Settlers of Catan - Player Setup", True, (0, 0, 0))
+        screen.blit(title, (600//2 - title.get_width()//2, 30))
+        
+        # Number of human players
+        human_text = font_text.render(f"Human Players: {num_human_players}", True, (0, 0, 0))
+        screen.blit(human_text, (100, 100))
+        
+        # Increase/decrease buttons
+        inc_button = pygame.Rect(400, 100, 30, 30)
+        dec_button = pygame.Rect(350, 100, 30, 30)
+        pygame.draw.rect(screen, (100, 200, 100), inc_button)
+        pygame.draw.rect(screen, (200, 100, 100), dec_button)
+        screen.blit(font_button.render("+", True, (0, 0, 0)), (inc_button.x + 8, inc_button.y + 2))
+        screen.blit(font_button.render("-", True, (0, 0, 0)), (dec_button.x + 11, dec_button.y + 2))
+        
+        # AI player info
+        y_offset = 150
+        for i in range(4 - num_human_players):
+            ai_text = font_text.render(f"AI Player {i+num_human_players+1}: {agent_types[i].name}", True, (0, 0, 0))
+            screen.blit(ai_text, (100, y_offset))
+            y_offset += 40
+        
+        # Draw start button
+        pygame.draw.rect(screen, (100, 150, 200), start_button)
+        start_text = font_button.render("Start Game", True, (0, 0, 0))
+        screen.blit(start_text, (start_button.x + start_button.width//2 - start_text.get_width()//2, 
+                                 start_button.y + start_button.height//2 - start_text.get_height()//2))
+        
+        pygame.display.flip()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return None, None  # Return None to exit the program
+                
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                
+                # Check if increment button is clicked
+                if inc_button.collidepoint(mouse_pos) and num_human_players < 4:
+                    num_human_players += 1
+                
+                # Check if decrement button is clicked
+                elif dec_button.collidepoint(mouse_pos) and num_human_players > 1:
+                    num_human_players -= 1
+                
+                # Check if start button is clicked
+                elif start_button.collidepoint(mouse_pos):
+                    pygame.quit()  # Close the menu window
+                    return num_human_players, agent_types[:4-num_human_players]
+    
+    return None, None  # Should never reach here, but just in case
 
 def main():
-    # You can adjust the SCREEN_PROPORTION global variable at the top of the file
-    # to change how much of the screen is used
+    # Show player setup menu
+    num_human_players, agent_types = display_player_setup_menu()
     
-    # Alternatively, you can specify an exact size:
-    # game = CatanGame(1280, 720)
+    # Exit if menu was closed without starting
+    if num_human_players is None:
+        return
     
-    game = CatanGame()  # Uses auto-detection with SCREEN_PROPORTION
+    # Start the game with selected setup
+    game = CatanGame(
+        num_human_players=num_human_players,
+        agent_types=agent_types
+    )
     game.run()
 
 if __name__ == "__main__":
