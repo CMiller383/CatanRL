@@ -143,28 +143,92 @@ class GameLogic:
     def upgrade_spot(self, spot_id):
         curr_player = self.get_current_player()
         spot = self.board.get_spot(spot_id)
-        
-        if spot.player != self.current_player_idx + 1:
-            print('not curr player')
-            return False
+        if not self.rolled_dice:
+            print("roll dice before upgrading spot")
         
         # cant upgrade a spot with a city on it
         if spot.settlement_type == SettlementType.CITY:
             return False
-        
         elif spot.settlement_type == SettlementType.SETTLEMENT:
+            if spot.player != self.current_player_idx + 1:
+                print('not curr player')
+                return False
             # check if we have the resources
-            if curr_player.buy_city():
+            if curr_player.has_city_resources():
+                curr_player.buy_city()
                 spot.build_settlement(curr_player.player_id, SettlementType.CITY)
                 return True
             else:
                 print('missing resources')
                 return False
         else:
-            # need logic here to check if we can build a settlement
+            print("trying to build settlement")
+
+            # check that player has road to this spot
+            has_road_to_spot = False
+            for road_id in curr_player.roads:
+                road = self.board.get_road(road_id)
+                if spot_id in (road.spot1_id, road.spot2_id):
+                    has_road_to_spot = True
+            
+            if not has_road_to_spot:
+                print("Doesnt have adjascent road")
+                return False
+            
+            #check that there isnt an adjascent settlement
+            if not self.is_valid_initial_settlement(spot_id):
+                print("too close to another settlement")
+                return False
+
+            # check that player has enough resources
+            if not curr_player.has_settlement_resources():
+                print("doesnt have resources")
+                return False
+            
+            curr_player.buy_settlement()
+            spot.build_settlement(curr_player.player_id, SettlementType.SETTLEMENT)
+            return True
+    
+
+
+    def place_road(self, new_road_id):
+        new_road = self.board.get_road(new_road_id)
+        curr_player = self.get_current_player()
+
+        if not self.rolled_dice:
+            print("Roll dice before placing road")
             return False
         
-
+        # Make sure the road exists
+        if new_road is None or new_road.owner is not None:
+            print('Road doesnt exist or has owner')
+            return False
+        
+        if not curr_player.has_road_resources():
+            print("Player does not have enough resources")
+            return False
+        
+        touching_settlement = False
+        for settlement_spot_id in curr_player.settlements:
+            if settlement_spot_id in (new_road.spot1_id, new_road.spot2_id):
+                touching_settlement = True
+        
+        touching_road = False
+        for road_id in self.get_current_player().roads:
+            road = self.board.get_road(road_id)
+            if (new_road.spot1_id in (road.spot1_id, road.spot2_id) or 
+                new_road.spot2_id in (road.spot1_id, road.spot2_id)):
+                touching_road = True
+        
+        if not (touching_road or touching_settlement):
+            print("Player does not have touching road or settlement")
+            return False
+        
+        self.get_current_player().buy_road()
+        new_road.build_road(curr_player.player_id)
+        curr_player.add_road(new_road_id)
+        return True
+        
 
     def place_initial_settlement(self, spot_id):
         """

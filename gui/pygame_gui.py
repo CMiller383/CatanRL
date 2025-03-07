@@ -613,6 +613,8 @@ class CatanGame:
                                 if self.check_dice_click(mouse_pos):
                                     self.game_logic.roll_dice()
                                     continue
+
+                                # upgrade spot (settlement/city)
                                 spot_id = self.check_spot_click(mouse_pos)
                                 if spot_id is not None:
                                     successfully_placed = self.game_logic.upgrade_spot(spot_id)
@@ -620,6 +622,18 @@ class CatanGame:
                                         print(f"Upgraded spot {spot_id}")
                                     else:
                                         print(f"Failed to upgrade spot {spot_id}")
+                                    continue
+                                
+                                # build road
+                                road_id = self.check_road_click(mouse_pos)
+                                if road_id is not None:
+                                    successfully_placed = self.game_logic.place_road(road_id)
+                                    if successfully_placed:
+                                        print(f"Placed road at {road_id}")
+                                    else:
+                                        print(f"Failed to place road at {road_id}")
+                                    continue
+                                
 
             else:
                 # Handle AI player's turn with a slight delay
