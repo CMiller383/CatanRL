@@ -185,6 +185,11 @@ class CatanGame:
         # Scale it as needed, for example 15% of the window width:
         diceroll_size = int(self.window_width * 0.15)
         self.diceroll_image = pygame.transform.smoothscale(self.diceroll_image, (diceroll_size, diceroll_size))
+
+        logo_path = os.path.join("assets", "logo.png")
+        self.logo_image = pygame.image.load(logo_path).convert_alpha()
+        logo_size = int(self.window_width * 0.1)
+        self.logo_image = pygame.transform.smoothscale(self.logo_image, (logo_size * 1.5, logo_size))
         
     
     def compute_transform(self, margin=0.1):
@@ -269,6 +274,11 @@ class CatanGame:
         # Get the rect of the scaled image and center it on the board.
         border_rect = self.border_image.get_rect(center=center)
         self.screen.blit(self.border_image, border_rect)
+
+    def draw_logo(self):
+        """Draw the logo in the top left corner with a small margin."""
+        margin = self.window_width * .02
+        self.screen.blit(self.logo_image, (margin, margin))
 
     def draw_dice(self):
         """Draw dice 1 and dice 2 on the bottom right of the screen."""
@@ -439,34 +449,6 @@ class CatanGame:
                     return road_id
         
         return None
-    
-    def display_info_panel(self):
-        """Display information panel in the top left corner"""
-        # Create a corner panel instead of full width
-        panel_width = int(self.window_width * 0.3)  # 30% of window width
-        panel_height = 80
-        panel_margin = 10
-        
-        panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
-        panel_surface.fill((255, 255, 255, 200))  # Semi-transparent white
-        self.screen.blit(panel_surface, (panel_margin, panel_margin))
-        
-        x_offset = panel_margin * 2
-        y_offset = panel_margin * 2
-        
-        # Display game phase instructions
-        if not self.game_logic.is_setup_complete():
-            instructions = self.game_logic.get_setup_instructions()
-            current_player = self.game_logic.get_current_player()
-            player_color = PLAYER_COLOR_RGBS[current_player.player_id]
-            
-            # Render with player color - use smaller font for instructions in corner panel
-            instruction_surface = self.info_font.render(instructions, True, player_color)
-            self.screen.blit(instruction_surface, (x_offset, y_offset))
-            y_offset += 25
-        else:
-            # Regular play instructions (to be implemented)
-            pass
 
     
     def draw_end_turn_button(self):
@@ -503,30 +485,22 @@ class CatanGame:
         panel_surface.fill((220, 220, 220, 180))  # Light gray with transparency
         self.screen.blit(panel_surface, (panel_x, 0))
         
-        # Draw player information
-        title_y = 20
-        title = self.info_font.render("PLAYERS", True, TEXT_COLOR)
-        title_rect = title.get_rect(center=(panel_x + panel_width // 2, title_y))
-        self.screen.blit(title, title_rect)
-        
         # Draw each player's status
-        y_pos = title_y + 40
+        y_pos = 20
         for player in self.players:
             # Player header with background in player's color
             player_rect = pygame.Rect(panel_x + 10, y_pos, panel_width - 20, 30)
             pygame.draw.rect(self.screen, PLAYER_COLOR_RGBS[player.player_id], player_rect)
             pygame.draw.rect(self.screen, TEXT_COLOR, player_rect, 1)  # Border
             
-            player_text = self.info_font.render(f"{player.name}", True, TEXT_COLOR)
+
+            player_name_string = player.name
+            if player.player_id == self.game_logic.get_current_player().player_id:
+                player_name_string = f"{player_name_string} - (curr turn)"
+            player_text = self.info_font.render(player_name_string, True, TEXT_COLOR)
             self.screen.blit(player_text, (panel_x + 15, y_pos + 5))
             
             y_pos += 35
-            
-            # Mark current player
-            if player.player_id == self.game_logic.get_current_player().player_id:
-                current_text = self.font.render("CURRENT TURN", True, PLAYER_COLOR_RGBS[player.player_id])
-                self.screen.blit(current_text, (panel_x + 15, y_pos))
-                y_pos += 25
             
             # Settlements and Roads count
             if player.settlements:
@@ -545,19 +519,38 @@ class CatanGame:
                  player.player_id == self.game_logic.get_current_player().player_id)):
                 
                 y_pos += 5
-                resources_title = self.font.render("Resources:", True, TEXT_COLOR)
-                self.screen.blit(resources_title, (panel_x + 15, y_pos))
-                y_pos += 20
                 
-                for resource, count in player.resources.items():
-                    if count > 0:  # Only show resources the player has
-                        res_color = RESOURCE_COLORS.get(resource, TEXT_COLOR)
-                        res_text = self.font.render(f"{resource.name}: {count}", True, res_color)
-                        self.screen.blit(res_text, (panel_x + 25, y_pos))
-                        y_pos += 20
+                # After drawing the player's name and counts for settlements/roads, add resource cards:
+                card_margin = 5
+                resources_order = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
+                num_cards = len(resources_order)
+                # Compute card width based on the available panel width (panel_width is defined earlier)
+                card_width = (panel_width - (num_cards + 1) * card_margin) / num_cards
+                card_height = card_width * 1.2  # Adjust this ratio as needed
+                x_start = panel_x + card_margin
+                y_resource = y_pos  # Use the current y position as the top of the resource cards row
+
+                for res in resources_order:
+                    rect = pygame.Rect(x_start, y_resource, card_width, card_height)
+                    # Fill the rectangle with the resource's color
+                    color = RESOURCE_COLORS.get(res, TEXT_COLOR)
+                    pygame.draw.rect(self.screen, color, rect)
+                    # Draw a border around the card
+                    pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
+                    # Get the count for this resource (defaulting to 0)
+                    count = player.resources.get(res, 0)
+                    count_text = self.font.render(str(count), True, TEXT_COLOR)
+                    # Center the count within the card
+                    text_rect = count_text.get_rect(center=rect.center)
+                    self.screen.blit(count_text, text_rect)
+                    x_start += card_width + card_margin
+
+                # Advance y_pos for spacing after the resource cards
+                y_pos += card_height + card_margin
+
             
             # Add spacing between players
-            y_pos += 15
+            y_pos += 40
 
     def check_end_turn_button(self, mouse_pos):
         """Check if the end turn button was clicked"""
@@ -660,9 +653,9 @@ class CatanGame:
             self.draw_roads()
             self.draw_spots()
             self.draw_player_status()
-            self.display_info_panel()
             self.draw_end_turn_button()
             self.draw_dice()
+            self.draw_logo()
             # Update the display
             pygame.display.flip()
             self.clock.tick(60)

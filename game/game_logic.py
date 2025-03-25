@@ -21,13 +21,13 @@ class GameLogic:
         self.num_players = 4  # Fixed at 4 players
         self.players = []
         self.agents = []
-        self.setup_turn_order = []  # For tracking setup phase
         self.setup_phase_settlement_placed = False  # Flag for tracking if settlement is placed in setup
         self.waiting_for_human_input = False  # Flag to track if we're waiting for human input
         self.last_settlement_placed = None  # Track last settlement for road placement
         self.last_dice1_roll = None
         self.last_dice2_roll = None
         self.rolled_dice = False
+        self.possible_moves = set()
         
         # Default all agents to random if not specified
         if agent_types is None:
@@ -54,9 +54,7 @@ class GameLogic:
             self.players.append(player)
             self.board.add_player(i+1, f"Player {i+1}")
             self.agents.append(create_agent(i+1, agent_type))
-        
-        # Setup turn order for initial placement
-        self.setup_turn_order = list(range(self.num_players))
+
     
     def get_current_player(self):
         """Returns the current player object"""
@@ -71,44 +69,30 @@ class GameLogic:
         return self.players[self.current_player_idx].is_human
     
     def is_valid_initial_settlement(self, spot_id):
-        """
-        Check if a spot is valid for initial settlement placement
-        """
+        """Check if a spot is valid for initial settlement placement"""
         spot = self.board.get_spot(spot_id)
         
-        # Make sure the spot exists
-        if spot is None:
+        # Make sure the spot exists and is free
+        if spot is None or spot.player is not None:
             return False
-        
-        # Make sure spot is not already occupied
-        if spot.player is not None:
-            return False
-        
-        # In initial setup, we don't need to check for connectivity to other settlements
-        # but we do need to check for the distance rule
-        
-        # Check distance rule: no settlement can be on an adjacent spot
-        for adjacent_road in self.board.roads.values():
-            if spot_id == adjacent_road.spot1_id:
-                adjacent_spot = self.board.spots.get(adjacent_road.spot2_id)
-                if adjacent_spot.player is not None:
-                    return False
-            elif spot_id == adjacent_road.spot2_id:
-                adjacent_spot = self.board.spots.get(adjacent_road.spot1_id)
-                if adjacent_spot.player is not None:
-                    return False
-        
-        return True
+
+        # Check distance rule
+        return self.is_two_spots_away_from_settlement(spot_id)
     
     def roll_dice(self):
-        if self.current_phase != GamePhase.REGULAR_PLAY or self.rolled_dice:
-            print(self.rolled_dice)
+        if self.current_phase != GamePhase.REGULAR_PLAY:
+            return False
+        
+        if "roll_dice" not in self.possible_moves:
             return False
         
         self.last_dice1_roll = random.randint(1, 6)
         self.last_dice2_roll = random.randint(1, 6)
         self.rolled_dice = True
         self.distribute_resources(self.last_dice1_roll + self.last_dice2_roll)
+
+        self.possible_moves = self.get_possible_moves()
+
         return True
 
     def distribute_resources(self, dice_result):
@@ -137,96 +121,134 @@ class GameLogic:
         if not (self.rolled_dice and self.current_phase == GamePhase.REGULAR_PLAY):
             return
         
+        if "end_turn" not in self.possible_moves:
+            return
+        
         self.rolled_dice = False
         self.current_player_idx = (self.current_player_idx + 1) % self.num_players
 
-    def upgrade_spot(self, spot_id):
-        curr_player = self.get_current_player()
-        spot = self.board.get_spot(spot_id)
-        if not self.rolled_dice:
-            print("roll dice before upgrading spot")
+        self.possible_moves = self.get_possible_moves()
+
+
+    def get_possible_moves(self):
+        moves = set()
+
+        if self.current_phase != GamePhase.REGULAR_PLAY:
+            # For now, we only consider regular play moves
+            return moves
         
-        # cant upgrade a spot with a city on it
-        if spot.settlement_type == SettlementType.CITY:
-            return False
-        elif spot.settlement_type == SettlementType.SETTLEMENT:
-            if spot.player != self.current_player_idx + 1:
-                print('not curr player')
-                return False
-            # check if we have the resources
-            if curr_player.has_city_resources():
-                curr_player.buy_city()
-                spot.build_settlement(curr_player.player_id, SettlementType.CITY)
-                return True
-            else:
-                print('missing resources')
-                return False
+        curr_player = self.get_current_player()
+
+        if not self.rolled_dice:
+            moves.add("roll_dice")
+            moves.add("play_knight")
+            
+            return moves
         else:
-            print("trying to build settlement")
+            moves.add("end_turn")
+        
+        # Add all possible settlement builds
+        if curr_player.has_settlement_resources():
+            for spot_id, spot in self.board.spots.items():
+                if spot.player is not None:
+                    continue 
 
-            # check that player has road to this spot
-            has_road_to_spot = False
-            for road_id in curr_player.roads:
-                road = self.board.get_road(road_id)
-                if spot_id in (road.spot1_id, road.spot2_id):
-                    has_road_to_spot = True
-            
-            if not has_road_to_spot:
-                print("Doesnt have adjascent road")
-                return False
-            
-            #check that there isnt an adjascent settlement
-            if not self.is_valid_initial_settlement(spot_id):
-                print("too close to another settlement")
-                return False
+                has_adjascent_road = self.has_adjascent_road(spot_id)
+                is_two_spots_away = self.is_two_spots_away_from_settlement(spot_id)
 
-            # check that player has enough resources
-            if not curr_player.has_settlement_resources():
-                print("doesnt have resources")
-                return False
-            
-            curr_player.buy_settlement()
-            spot.build_settlement(curr_player.player_id, SettlementType.SETTLEMENT)
-            return True
-    
+                if has_adjascent_road and is_two_spots_away:
+                    moves.add(("upgrade", spot_id))
+        
+        # Add all possible city builds
+        if curr_player.has_city_resources():
+            for spot_id, spot in self.board.spots.items():
+                if spot.player == curr_player.player_id and spot.settlement_type == SettlementType.SETTLEMENT:
+                    moves.add(("upgrade", spot_id))
+        
+        # Add all possible road builds
+        if curr_player.has_road_resources():
+            for road_id, road in self.board.roads.items():
+                # Check if road is already claimed
+                if road.owner is not None:
+                    continue
 
+                # Check connectivity: the road must touch a settlement or road of the current player.
+                touching_settlement = any(spot_id in (road.spot1_id, road.spot2_id) for spot_id in curr_player.settlements)
+                touching_road = False
+                for r_id in curr_player.roads:
+                    existing_road = self.board.get_road(r_id)
+                    if existing_road:
+                        if road.spot1_id in (existing_road.spot1_id, existing_road.spot2_id) or \
+                        road.spot2_id in (existing_road.spot1_id, existing_road.spot2_id):
+                            touching_road = True
+                            break
 
-    def place_road(self, new_road_id):
-        new_road = self.board.get_road(new_road_id)
+                if touching_settlement or touching_road:
+                    moves.add(("road", road_id))
+        
+        return moves
+
+    # checks that our spot is touching a road we built
+    def has_adjascent_road(self, spot_id):
         curr_player = self.get_current_player()
 
-        if not self.rolled_dice:
-            print("Roll dice before placing road")
+        has_adjacent_road = False
+        for r_id in curr_player.roads:
+            road = self.board.get_road(r_id)
+            if road and spot_id in (road.spot1_id, road.spot2_id):
+                has_adjacent_road = True
+                break
+        
+        return has_adjacent_road
+
+    # distance rule
+    # checks that a spot is 2 away
+    def is_two_spots_away_from_settlement(self, spot_id):
+        for adjacent_road in self.board.roads.values():
+            if spot_id == adjacent_road.spot1_id:
+                adjacent_spot = self.board.spots.get(adjacent_road.spot2_id)
+                if adjacent_spot.player is not None:
+                    return False
+            elif spot_id == adjacent_road.spot2_id:
+                adjacent_spot = self.board.spots.get(adjacent_road.spot1_id)
+                if adjacent_spot.player is not None:
+                    return False
+        return True
+
+
+    def upgrade_spot(self, spot_id):        
+        if ("upgrade", spot_id) not in self.possible_moves:
             return False
         
-        # Make sure the road exists
-        if new_road is None or new_road.owner is not None:
-            print('Road doesnt exist or has owner')
+        curr_player = self.get_current_player()
+        
+        spot = self.board.get_spot(spot_id)
+
+        if spot.settlement_type == SettlementType.SETTLEMENT:
+            spot.build_settlement(curr_player.player_id, SettlementType.CITY)
+            curr_player.buy_city()
+        else:
+            spot.build_settlement(curr_player.player_id, SettlementType.SETTLEMENT)
+            curr_player.buy_settlement()
+        
+        self.possible_moves = self.get_possible_moves()
+
+        return True
+
+
+    def place_road(self, road_id):
+        if ("road", road_id) not in self.possible_moves:
             return False
         
-        if not curr_player.has_road_resources():
-            print("Player does not have enough resources")
-            return False
-        
-        touching_settlement = False
-        for settlement_spot_id in curr_player.settlements:
-            if settlement_spot_id in (new_road.spot1_id, new_road.spot2_id):
-                touching_settlement = True
-        
-        touching_road = False
-        for road_id in self.get_current_player().roads:
-            road = self.board.get_road(road_id)
-            if (new_road.spot1_id in (road.spot1_id, road.spot2_id) or 
-                new_road.spot2_id in (road.spot1_id, road.spot2_id)):
-                touching_road = True
-        
-        if not (touching_road or touching_settlement):
-            print("Player does not have touching road or settlement")
-            return False
-        
-        self.get_current_player().buy_road()
+        new_road = self.board.get_road(road_id)
+        curr_player = self.get_current_player()
+
+        curr_player.buy_road()
         new_road.build_road(curr_player.player_id)
-        curr_player.add_road(new_road_id)
+        curr_player.add_road(road_id)
+
+        self.possible_moves = self.get_possible_moves()
+
         return True
         
 
@@ -305,7 +327,6 @@ class GameLogic:
         player.add_road(road_id)
         
         # Advance to next player or phase
-        print("advancing")
         self._advance_setup_phase()
         
         return True
@@ -321,30 +342,40 @@ class GameLogic:
             if self.current_player_idx == self.num_players - 1:
                 self.current_phase = GamePhase.SETUP_PHASE_2
             else:
-                print("incrementing")
                 self.current_player_idx += 1   
 
         elif self.current_phase == GamePhase.SETUP_PHASE_2:
             # If we've gone through all players in reverse order
             if self.current_player_idx == 0:
                 self.current_phase = GamePhase.REGULAR_PLAY
+                self.possible_moves = self.get_possible_moves()
             else: 
                 self.current_player_idx -= 1
             
-    
-    def get_setup_instructions(self):
-        """Get instructions for the current setup phase"""
-        player = self.get_current_player()
-        
-        if not self.setup_phase_settlement_placed:
-            return f"{player.name}: Place your {'second' if self.current_phase == GamePhase.SETUP_PHASE_2 else 'first'} settlement"
-        else:
-            return f"{player.name}: Place a road connected to your settlement"
-    
     def is_setup_complete(self):
         """Check if the setup phase is complete"""
         return self.current_phase == GamePhase.REGULAR_PLAY
     
+    def do_move(self, move):
+        if move not in self.possible_moves:
+            return False
+        
+        if move[0] == "upgrade":
+            self.upgrade_spot(move[1])
+        elif move[0] == "road":
+            self.place_road(move[1])
+        elif move == "end_turn":
+            self.end_turn()
+        elif move == "roll_dice":
+            self.roll_dice()
+        
+        
+        self.possible_moves = self.get_possible_moves()
+        return True
+    
+
+    # WE SHOULD EVENTUALLY CHANGE THIS TO PASS IN SOME DATA TO THE AGENT
+    # AND GET A MOVE BACK
     def process_ai_turn(self):
         """Process a turn for an AI player"""
         if self.is_current_player_human():
@@ -377,9 +408,10 @@ class GameLogic:
                         return True  # Successfully processed the turn
         
         # Handle regular play phase (to be implemented)
-        # we will need to handle knights later before this
-        self.roll_dice()
-        # we will then need to chose moves
-        self.end_turn()
-
-        return False  # Turn not processed
+        # we will need to handle knights later before this        
+        random_move = random.choice(tuple(self.possible_moves))
+        while random_move != "end_turn":
+            self.do_move(random_move)
+            random_move = random.choice(tuple(self.possible_moves))
+        
+        self.do_move(random_move)
