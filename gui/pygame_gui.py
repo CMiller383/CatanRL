@@ -1162,7 +1162,7 @@ def display_player_setup_menu():
     
     # Default setup
     num_human_players = 1
-    agent_types = [AgentType.RANDOM] * 3  # Default all AI to random
+    agent_types = [AgentType.HEURISTIC] * 3  # Default all AI to random
     
     # Start button
     start_button = pygame.Rect(200, 320, 200, 50)

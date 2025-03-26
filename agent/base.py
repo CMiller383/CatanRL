@@ -4,6 +4,7 @@ from enum import Enum
 class AgentType(Enum):
     HUMAN = 0
     RANDOM = 1
+    HEURISTIC = 2
 
     # Future agent types here
 
@@ -34,8 +35,10 @@ def create_agent(player_id, agent_type):
     if agent_type == AgentType.HUMAN:
         return HumanAgent(player_id)
     elif agent_type == AgentType.RANDOM:
-        # Import here to avoid circular imports
         from agent.random_agent import RandomAgent
         return RandomAgent(player_id)
+    elif agent_type == AgentType.HEURISTIC:
+        from agent.simple_heuristic_agent import SimpleHeuristicAgent
+        return SimpleHeuristicAgent(player_id)
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")

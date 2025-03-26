@@ -5,6 +5,8 @@ from .spot import SettlementType
 from .resource import Resource
 from .player import Player
 import random
+from agent.random_agent import RandomAgent
+from agent.simple_heuristic_agent import SimpleHeuristicAgent
 from .development_card import DevelopmentCard, DevelopmentCardDeck, DevCardType
 
 class GamePhase(Enum):
@@ -55,7 +57,7 @@ class GameLogic:
         
         # Default all agents to random if not specified
         if agent_types is None:
-            agent_types = [AgentType.RANDOM] * (self.num_players - num_human_players)
+            agent_types = [AgentType.HEURISTIC] * (self.num_players - num_human_players)
         
         # Initialize players and agents
         self._init_players(num_human_players, agent_types)
@@ -560,11 +562,13 @@ class GameLogic:
                 return self.move_robber(data)
         
         return False
+    
 
-    # WE SHOULD EVENTUALLY CHANGE THIS TO PASS IN SOME DATA TO THE AGENT
-    # AND GET A MOVE BACK
     def process_ai_turn(self):
         """Process a turn for an AI player"""
+
+        print('here')
+
         if self.is_current_player_human():
             # Not an AI player, do nothing
             self.waiting_for_human_input = True
@@ -576,101 +580,22 @@ class GameLogic:
         # Handle the setup phase
         if not self.is_setup_complete():
             if not self.setup_phase_settlement_placed:
-                # AI needs to place a settlement
-                from agent.random_agent import RandomAgent
-                if isinstance(agent, RandomAgent):
-                    spot_id = agent.get_initial_settlement(self)
-                    if spot_id and self.place_initial_settlement(spot_id):
-                        self.last_settlement_placed = spot_id
-                        print(f"AI {self.get_current_player().name} placed settlement at spot {spot_id}")
-                        return True  # Successfully processed part of the turn
+                print('initial settle')
+                spot_id = agent.get_initial_settlement(self)
+                self.last_settlement_placed = spot_id
+                return self.place_initial_settlement(spot_id)
             else:
-                # AI needs to place a road
-                from agent.random_agent import RandomAgent
-                if isinstance(agent, RandomAgent):
-                    road_id = agent.get_initial_road(self, self.last_settlement_placed)
-                    if road_id and self.place_initial_road(road_id, self.last_settlement_placed):
-                        print(f"AI {self.get_current_player().name} placed road at {road_id}")
-                        self.last_settlement_placed = None
-                        return True  # Successfully processed the turn
-            return False
-        
-        # Regular play phase
-        print(f"AI {self.get_current_player().name} is taking a turn")
-        
-        # Make sure we have moves
-        if not self.possible_moves:
-            print("No possible moves for AI, forcing end turn")
-            self.end_turn()
-            return True
-        
-        # First roll the dice if needed
-        if "roll_dice" in self.possible_moves:
-            print("AI rolling dice")
-            self.roll_dice()
-        
-        # Handle special states that require specific actions
-        if self.awaiting_robber_placement:
-            valid_hexes = [hex_id for hex_id in self.board.hexes.keys() if hex_id != self.robber_hex_id]
-            if valid_hexes:
-                chosen_hex = random.choice(valid_hexes)
-                print(f"AI moving robber to hex {chosen_hex}")
-                self.move_robber(chosen_hex)
-            return True
-        
-        if self.awaiting_resource_selection:
-            resources = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
-            chosen_resource = random.choice(resources)
-            print(f"AI selecting resource {chosen_resource.name} for Year of Plenty")
-            self.select_year_of_plenty_resource(chosen_resource)
-            return True
-        
-        if self.awaiting_monopoly_selection:
-            resources = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
-            chosen_resource = random.choice(resources)
-            print(f"AI selecting resource {chosen_resource.name} for Monopoly")
-            self.select_monopoly_resource(chosen_resource)
-            return True
-        
-        # Handle road building from development card
-        if 0 < self.road_building_roads_placed < 2:
-            free_road_moves = [move for move in self.possible_moves if isinstance(move, tuple) and move[0] == "free_road"]
-            if free_road_moves:
-                chosen_move = random.choice(free_road_moves)
-                print(f"AI placing free road at {chosen_move[1]}")
-                self.place_free_road(chosen_move[1])
+                road_id = agent.get_initial_road(self, self.last_settlement_placed)
+                self.place_initial_road(road_id, self.last_settlement_placed)
+                self.last_settlement_placed = None
                 return True
         
-        # Now make random moves until we can end turn
-        max_moves = 5  # Limit to prevent possible infinite loops
-        moves_made = 0
-        
-        while "end_turn" in self.possible_moves and moves_made < max_moves:
-            # Filter out end_turn for regular moves
-            build_moves = [move for move in self.possible_moves 
-                        if move != "end_turn" and move != "roll_dice"]
-            
-            # If no more build moves, end turn
-            if not build_moves:
-                break
-            
-            # Make a random move
-            random_move = random.choice(build_moves)
-            print(f"AI making move: {random_move}")
-            self.do_move(random_move)
-            moves_made += 1
-            
-            # Check if we have any more valid moves
-            if not self.possible_moves:
-                print("No more possible moves")
-                break
-        
-        # Finally end turn if possible
-        if "end_turn" in self.possible_moves:
-            print("AI ending turn")
-            self.end_turn()
-        
-        return True
+        move = agent.get_move(self)
+        while move != "end_turn":
+            self.do_move(move)
+            move = agent.get_move(self)
+
+        self.end_turn()
 
     def buy_development_card(self):
         """Buy a development card from the deck"""
@@ -946,3 +871,15 @@ class GameLogic:
             
         self.awaiting_steal_selection = False
         return True
+    
+    def create_agent(player_id, agent_type):
+        if agent_type == AgentType.HUMAN:
+            return None
+        elif agent_type == AgentType.RANDOM:
+            from agent.random_agent import RandomAgent
+            return RandomAgent(player_id)
+        elif agent_type == AgentType.HEURISTIC:
+            from agent.simple_heuristic_agent import SimpleHeuristicAgent
+            return SimpleHeuristicAgent(player_id)
+        else:
+            print("Unsupported agent type")
