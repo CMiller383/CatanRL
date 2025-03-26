@@ -4,3 +4,4 @@ from .spot import Spot, SettlementType
 from .road import Road
 from .player import Player
 from .resource import Resource
+from .development_card import DevelopmentCard
