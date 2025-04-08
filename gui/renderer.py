@@ -3,6 +3,7 @@ Renderer for the Catan game GUI.
 """
 import os
 import pygame
+from game.rules import is_valid_initial_road
 from gui.constants import *
 from game.enums import GamePhase, SettlementType
 from game.development_card import DevCardType
@@ -240,7 +241,7 @@ class Renderer:
                 color = PLAYER_COLOR_RGBS[road.owner]
             # In setup phase with settlement placed, check if road is valid
             elif self.game_logic.state.setup_phase_settlement_placed and last_settlement_placed is not None:
-                valid = self.game_logic.is_valid_initial_road(road_id, last_settlement_placed)
+                valid = is_valid_initial_road(self.game_logic.state, road_id, last_settlement_placed)
                 if valid:
                     color = ROAD_VALID_COLOR
                 
@@ -311,11 +312,10 @@ class Renderer:
         # Create button rectangle
         self.end_turn_button = pygame.Rect(button_x, button_y, button_width, button_height)
 
+        color = END_BUTTON_DISABLED_COLOR
         if self.game_logic.user_can_end_turn():
             color = END_BUTTON_ENABLED_COLOR
-        else:
-            color = END_BUTTON_DISABLED_COLOR
-            
+
         pygame.draw.rect(self.screen, color, self.end_turn_button)
         pygame.draw.rect(self.screen, TEXT_COLOR, self.end_turn_button, 2)  # Border
     
@@ -368,11 +368,7 @@ class Renderer:
                 self.screen.blit(roads_text, (panel_x + 15, y_pos))
                 y_pos += 20
             
-            # Resources (only show in regular play phase or to the current player in setup phase 2)
-            if (self.game_logic.is_setup_complete() or 
-                (self.game_logic.state.current_phase == GamePhase.SETUP_PHASE_2 and 
-                 player.player_idx == self.game_logic.state.current_player_idx)):
-                
+            if (self.game_logic.state.current_phase != GamePhase.SETUP_PHASE_1):                
                 y_pos += 5
                 resources_title = self.font.render("Resources:", True, TEXT_COLOR)
                 self.screen.blit(resources_title, (panel_x + 15, y_pos))

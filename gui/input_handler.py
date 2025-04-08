@@ -3,6 +3,8 @@ Input handler for the Catan game GUI.
 """
 import math
 
+from game.setup import place_initial_road, place_initial_settlement
+
 class InputHandler:
     def __init__(self, game_logic, renderer, ui_handlers=None):
         self.game_logic = game_logic
@@ -52,7 +54,7 @@ class InputHandler:
     
     def check_end_turn_button(self, mouse_pos):
         """Check if the end turn button was clicked"""
-        if hasattr(self.renderer, 'end_turn_button') and self.renderer.end_turn_button.collidepoint(mouse_pos) and self.game_logic.user_can_end_turn():
+        if hasattr(self.renderer, 'end_turn_button') and self.renderer.end_turn_button.collidepoint(mouse_pos):
             return True
         return False
     
@@ -93,7 +95,7 @@ class InputHandler:
                 # Attempt to place settlement immediately on click
                 spot_id = self.check_spot_click(mouse_pos)
                 if spot_id is not None:
-                    successfully_placed = self.game_logic.place_initial_settlement(spot_id)
+                    successfully_placed = place_initial_settlement(self.game_logic.state, spot_id)
                     if successfully_placed:
                         print(f"Placed settlement at spot {spot_id}")
                         self.last_settlement_placed = spot_id
@@ -103,7 +105,7 @@ class InputHandler:
                 # Settlement already placed; attempt to place road immediately
                 road_id = self.check_road_click(mouse_pos)
                 if road_id is not None:
-                    successfully_placed = self.game_logic.place_initial_road(road_id, self.last_settlement_placed)
+                    successfully_placed = place_initial_road(self.game_logic.state, road_id, self.last_settlement_placed)
                     if successfully_placed:
                         print(f"Placed road at {road_id}")
                         self.last_settlement_placed = None
@@ -188,7 +190,7 @@ class InputHandler:
             
         # Roll dice
         if self.check_dice_click(mouse_pos):
-            self.game_logic.roll_dice()
+            self.game_logic.do_action("roll_dice")
             return
 
         # Handle road building (from dev card)

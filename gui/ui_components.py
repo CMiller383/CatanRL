@@ -4,7 +4,7 @@ UI components for the Catan game GUI.
 import pygame
 from gui.constants import *
 from game.development_card import DevCardType
-from game.enums import Resource
+from game.enums import GamePhase, Resource
 
 class DevCardHandler:
     def __init__(self, game_logic, screen, window_width, window_height, fonts, dev_card_icons=None):
@@ -24,7 +24,7 @@ class DevCardHandler:
 
     def draw_development_cards(self):
         """Draw development cards panel and controls for the current player"""
-        if not self.game_logic.is_setup_complete() or not self.game_logic.is_current_player_human():
+        if self.game_logic.state != GamePhase.REGULAR_PLAY or not self.game_logic.is_current_player_human():
             return  # Only show dev cards in regular play phase for human players
             
         curr_player = self.game_logic.state.get_current_player()
