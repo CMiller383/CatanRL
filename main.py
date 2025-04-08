@@ -1,16 +1,12 @@
-from gui.pygame_gui import CatanGame, display_player_setup_menu
+from agent.base import AgentType
+from gui.catan_game import CatanGame
 
 def main():
-    # Show player setup menu
-    num_human_players, agent_types = display_player_setup_menu()
-    
-    # Exit if menu was closed without starting
-    if num_human_players is None:
-        return
-    
+    agent_types = [AgentType.HEURISTIC] * 4
+    agent_types[0] = AgentType.HUMAN
+
     # Start the game with selected setup
     game = CatanGame(
-        num_human_players=num_human_players,
         agent_types=agent_types
     )
     game.run()

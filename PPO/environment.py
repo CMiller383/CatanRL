@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple, Any, Optional
 
 from game.board import Board
 from game.player import Player
-from game.resource import Resource
+from game.enums.resource import Resource
 from game.spot import SettlementType
 from game.game_logic import GameLogic
 from agent.base import AgentType

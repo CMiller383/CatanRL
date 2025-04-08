@@ -3,15 +3,13 @@ import random
 from .hex import Hex
 from .spot import Spot
 from .road import Road
-from .player import Player
-from .resource import Resource
+from .enums import Resource
 
 class Board:
     def __init__(self):
         self.hexes = {}   # hex_id -> Hex
         self.spots = {}   # spot_id -> Spot
         self.roads = {}   # road_id -> Road
-        self.players = {} # player_id -> Player
         self._init_hexes()
         self._init_spots()
         self._init_roads()
@@ -115,11 +113,6 @@ class Board:
             self.roads[road_id] = Road(s1, s2, adjacent_hexes)
             road_id += 1
 
-    
-    def add_player(self, player_id: int, name: str = ""):
-        player = Player(player_id, name)
-        self.players[player_id] = player
-    
     def get_hex(self, hex_id: int):
         return self.hexes.get(hex_id)
     
@@ -128,7 +121,3 @@ class Board:
     
     def get_road(self, road_id: int):
         return self.roads.get(road_id)
-    
-    def __repr__(self):
-        return (f"Board(hexes={list(self.hexes.keys())}, spots={list(self.spots.keys())}, "
-                f"roads={list(self.roads.keys())}, players={list(self.players.keys())})")

@@ -1,4 +1,4 @@
-from .resource import Resource
+from .enums import Resource
 
 class Hex:
     def __init__(self, hex_id: int, number: int, resource: Resource, center: tuple):

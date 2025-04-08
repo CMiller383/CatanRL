@@ -1,6 +1,6 @@
 import random
 from .base import Agent, AgentType
-from game.resource import Resource
+from game.enums import Resource
 
 class SimpleHeuristicAgent(Agent):
     """A simple heuristic agent:
@@ -15,11 +15,11 @@ class SimpleHeuristicAgent(Agent):
         pip_values = {2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1}
         best_spot = None
         best_score = -1
-        for spot_id, spot in game_logic.board.spots.items():
+        for spot_id, spot in game_logic.state.board.spots.items():
             if game_logic.is_valid_initial_settlement(spot_id):
                 score = 0
                 for hex_id in spot.adjacent_hex_ids:
-                    hex_obj = game_logic.board.get_hex(hex_id)
+                    hex_obj = game_logic.state.board.get_hex(hex_id)
                     if hex_obj.resource == Resource.DESERT:
                         continue
                     pip = pip_values.get(hex_obj.number, 0)
@@ -32,39 +32,39 @@ class SimpleHeuristicAgent(Agent):
     
     def get_initial_road(self, game_logic, settlement_id):
         valid_roads = [
-            road_id for road_id, road in game_logic.board.roads.items() 
+            road_id for road_id, road in game_logic.state.board.roads.items() 
             if game_logic.is_valid_initial_road(road_id, settlement_id)
         ]
         if valid_roads:
             return random.choice(valid_roads)
         return None
 
-    def get_move(self, game_logic):
+    def get_action(self, game_logic):
         # If dice haven't been rolled yet, roll them.
-        if "roll_dice" in game_logic.possible_moves:
+        if "roll_dice" in game_logic.state.possible_actions:
             return "roll_dice"
         
         # If a robber move is required, pick one.
-        if game_logic.awaiting_robber_placement:
-            valid_hexes = [hex_id for hex_id in game_logic.board.hexes.keys()
-                           if hex_id != game_logic.robber_hex_id]
+        if game_logic.state.awaiting_robber_placement:
+            valid_hexes = [hex_id for hex_id in game_logic.state.board.hexes.keys()
+                           if hex_id != game_logic.state.robber_hex_id]
             if valid_hexes:
                 return ("move_robber", random.choice(valid_hexes))
         
         # If resource selection is required (Year of Plenty), pick one at random.
-        if game_logic.awaiting_resource_selection:
+        if game_logic.state.awaiting_resource_selection:
             resources = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
             return ("select_resource", random.choice(resources))
         
         # If monopoly selection is required, choose a resource at random.
-        if game_logic.awaiting_monopoly_selection:
+        if game_logic.state.awaiting_monopoly_selection:
             resources = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
             return ("select_monopoly", random.choice(resources))
         
         # During road building via a dev card, if free road moves exist.
-        if 0 < game_logic.road_building_roads_placed < 2:
+        if 0 < game_logic.state.road_building_roads_placed < 2:
             free_road_moves = [
-                move for move in game_logic.possible_moves
+                move for move in game_logic.state.possible_actions
                 if isinstance(move, tuple) and move[0] == "free_road"
             ]
             if free_road_moves:
@@ -73,7 +73,7 @@ class SimpleHeuristicAgent(Agent):
         # Regular build moves in order of priority:
         # 1. Upgrade a settlement to a city.
         upgrade_moves = [
-            move for move in game_logic.possible_moves
+            move for move in game_logic.state.possible_actions
             if isinstance(move, tuple) and move[0] == "upgrade_city"
         ]
         if upgrade_moves:
@@ -81,22 +81,22 @@ class SimpleHeuristicAgent(Agent):
         
         # 2. Build a road.
         road_moves = [
-            move for move in game_logic.possible_moves
+            move for move in game_logic.state.possible_actions
             if isinstance(move, tuple) and move[0] == "road"
         ]
         if road_moves:
             return random.choice(road_moves)
         
         # 3. Buy a development card.
-        if "buy_dev_card" in game_logic.possible_moves:
+        if "buy_dev_card" in game_logic.state.possible_actions:
             return "buy_dev_card"
         
         # 4. If none of the above, try ending the turn.
-        if "end_turn" in game_logic.possible_moves:
+        if "end_turn" in game_logic.state.possible_actions:
             return "end_turn"
         
         # pick a random move worst case
-        moves = list(game_logic.possible_moves)
+        moves = list(game_logic.state.possible_actions)
         if moves:
             return random.choice(moves)
         return None

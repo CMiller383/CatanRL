@@ -2,51 +2,10 @@ import os
 import pygame
 import math
 from game.board import Board
-from game.resource import Resource
+
 from game.spot import SettlementType
-from game.game_logic import GameLogic, GamePhase
-from game.development_card import DevCardType
-
-
-RESOURCE_COLORS = {
-    Resource.WOOD: (60, 179, 113),    # Medium Sea Green
-    Resource.BRICK: (205, 92, 92),    # Indian Red
-    Resource.WHEAT: (255, 215, 0),     # Gold
-    Resource.SHEEP: (152, 251, 152),   # Pale Green
-    Resource.ORE: (169, 169, 169),     # Dark Gray
-    Resource.DESERT: (244, 164, 96)    # Sandy Brown
-}
-
-PLAYER_COLOR_RGBS = {
-    1: (255, 99, 71),    # Tomato Red
-    2: (65, 105, 225),   # Royal Blue
-    3: (255, 255, 255),  # White
-    4: (138, 43, 226)    # Blue Violet
-}
-PLAYER_COLOR_NAMES = {
-    1: 'red',
-    2: 'blue',
-    3: 'white',
-    4: 'violet'
-}
-
-ROAD_COLOR = (160, 82, 45)             # Sienna
-ROAD_HIGHLIGHT_COLOR = (255, 69, 0)    # Orange Red
-ROAD_INVALID_COLOR = (140, 140, 140)   # Dark Gray
-ROAD_VALID_COLOR = (200, 95, 55) 
-
-SPOT_COLOR = (255, 255, 255)           # White
-
-TEXT_COLOR = (0, 0, 0)                 # Black
-BACKGROUND_COLOR = (176, 224, 230)     # Powder Blue
-END_BUTTON_ENABLED_COLOR = (255, 0, 0)
-END_BUTTON_DISABLED_COLOR = (140, 0, 0)
-
-DEV_CARD_COLOR = (245, 245, 220)       # Beige
-DEV_CARD_ENABLED_COLOR = (220, 220, 150)  # Light yellow
-DEV_CARD_DISABLED_COLOR = (190, 190, 190)  # Gray
-DEV_CARD_SELECTED_COLOR = (255, 223, 0)  # Gold
-
+from game.game_logic import GameLogic
+from game.enums import GamePhase
 
 # Global screen proportion (how much of the screen to use)
 SCREEN_PROPORTION = 0.75
@@ -54,7 +13,7 @@ SCREEN_PROPORTION = 0.75
 from agent.base import AgentType
 
 class CatanGame:
-    def __init__(self, window_width=None, window_height=None, num_human_players=1, agent_types=None):
+    def __init__(self, window_width=None, window_height=None, agent_types=None):
         pygame.init()
         
         # Auto-detect screen size if not provided
@@ -87,8 +46,8 @@ class CatanGame:
         self.board = Board()
         
         # Initialize game logic with player setup
-        self.game_logic = GameLogic(self.board, num_human_players, agent_types)
-        self.players = self.game_logic.players  # Reference to players for easier access
+        self.game_logic = GameLogic(self.board, agent_types)
+        self.players = self.game_logic.state.players  # Reference to players for easier access
         self.ai_thinking_timer = 0  # Timer to create a slight delay between AI moves
         
         # Calculate scale and offset to fit the board in the window
@@ -313,9 +272,9 @@ class CatanGame:
         pos2 = (dice_x + dice_size, dice_y)
 
         
-        if self.game_logic.last_dice1_roll is not None:
-            dice_1_image = self.dice_images[self.game_logic.last_dice1_roll]
-            dice_2_image = self.dice_images[self.game_logic.last_dice2_roll]
+        if self.game_logic.state.dice1_roll is not None:
+            dice_1_image = self.dice_images[self.game_logic.state.dice1_roll]
+            dice_2_image = self.dice_images[self.game_logic.state.dice2_roll]
         else:
             dice_1_image = self.dice_images[1]
             dice_2_image = self.dice_images[1]
@@ -331,7 +290,7 @@ class CatanGame:
         if not self.game_logic.is_setup_complete() or not self.game_logic.is_current_player_human():
             return  # Only show dev cards in regular play phase for human players
             
-        curr_player = self.game_logic.get_current_player()
+        curr_player = self.game_logic.state.get_current_player()
         
         # Clear previous buttons
         self.dev_card_buttons = []
@@ -345,7 +304,7 @@ class CatanGame:
         
         # Only draw if player has dev cards or can buy them
         has_dev_cards = len(curr_player.dev_cards) > 0
-        can_buy_dev_card = "buy_dev_card" in self.game_logic.possible_moves
+        can_buy_dev_card = "buy_dev_card" in self.game_logic.state.possible_actions
         
         if not (has_dev_cards or can_buy_dev_card):
             return
@@ -401,14 +360,14 @@ class CatanGame:
                 can_play = False
                 just_purchased = curr_player.just_purchased_dev_card and i == len(curr_player.dev_cards) - 1
                 
-                if not just_purchased and not self.game_logic.dev_card_played_this_turn:
-                    if card.card_type == DevCardType.KNIGHT and "play_knight" in self.game_logic.possible_moves:
+                if not just_purchased and not self.game_logic.state.dev_card_played_this_turn:
+                    if card.card_type == DevCardType.KNIGHT and "play_knight" in self.game_logic.state.possible_actions:
                         can_play = True
-                    elif card.card_type == DevCardType.ROAD_BUILDING and "play_road_building" in self.game_logic.possible_moves:
+                    elif card.card_type == DevCardType.ROAD_BUILDING and "play_road_building" in self.game_logic.state.possible_actions:
                         can_play = True
-                    elif card.card_type == DevCardType.YEAR_OF_PLENTY and "play_year_of_plenty" in self.game_logic.possible_moves:
+                    elif card.card_type == DevCardType.YEAR_OF_PLENTY and "play_year_of_plenty" in self.game_logic.state.possible_actions:
                         can_play = True
-                    elif card.card_type == DevCardType.MONOPOLY and "play_monopoly" in self.game_logic.possible_moves:
+                    elif card.card_type == DevCardType.MONOPOLY and "play_monopoly" in self.game_logic.state.possible_actions:
                         can_play = True
                 
                 # Determine card color based on state
@@ -480,7 +439,7 @@ class CatanGame:
     
     def draw_resource_selection(self):
         """Draw resource selection for Year of Plenty and Monopoly actions"""
-        if not self.game_logic.awaiting_resource_selection and not self.game_logic.awaiting_monopoly_selection:
+        if not self.game_logic.state.awaiting_resource_selection and not self.game_logic.state.awaiting_monopoly_selection:
             return
             
         # Clear previous buttons
@@ -498,7 +457,7 @@ class CatanGame:
         self.screen.blit(panel_surface, (panel_x, panel_y))
         
         # Title
-        if self.game_logic.awaiting_resource_selection:
+        if self.game_logic.state.awaiting_resource_selection:
             title = "Select Resource (Year of Plenty)"
             count_text = f"Select {self.game_logic.awaiting_resource_selection_count} resource(s)"
         else:
@@ -535,24 +494,24 @@ class CatanGame:
             self.screen.blit(text, text_rect)
             
             # Store button for click detection
-            action_type = "monopoly" if self.game_logic.awaiting_monopoly_selection else "year_of_plenty"
+            action_type = "monopoly" if self.game_logic.state.awaiting_monopoly_selection else "year_of_plenty"
             self.resource_selection_buttons.append((action_type, resource, button))
     
     def draw_robber_placement(self):
         """Highlight hexes for robber placement when needed"""
-        if not self.game_logic.awaiting_robber_placement and not self.robber_placement_active:
+        if not self.game_logic.state.awaiting_robber_placement and not self.robber_placement_active:
             return
             
         # Draw an overlay on current robber hex
-        if self.game_logic.robber_hex_id is not None:
-            center = self.hex_centers[self.game_logic.robber_hex_id]
+        if self.game_logic.state.robber_hex_id is not None:
+            center = self.hex_centers[self.game_logic.state.robber_hex_id]
             pygame.draw.circle(self.screen, (0, 0, 0, 128), center, self.number_circle_radius * 1.5)
             robber_text = self.info_font.render("R", True, (255, 255, 255))
             robber_rect = robber_text.get_rect(center=center)
             self.screen.blit(robber_text, robber_rect)
         
         # Instruction text
-        if self.game_logic.awaiting_robber_placement or self.robber_placement_active:
+        if self.game_logic.state.awaiting_robber_placement or self.robber_placement_active:
             text = self.instruction_font.render("Click on a hex to move the robber", True, (255, 0, 0))
             text_rect = text.get_rect(center=(self.window_width * 0.4, 30))
             self.screen.blit(text, text_rect)
@@ -587,10 +546,10 @@ class CatanGame:
         button_width = panel_width - 20
         
         # Store button data for each victim
-        for i, player_id in enumerate(potential_victims):
+        for i, player_idx in enumerate(potential_victims):
             button_y = panel_y + title_height + i * (button_height + button_margin)
             button_rect = pygame.Rect(panel_x + 10, button_y, button_width, button_height)
-            self.steal_buttons.append((player_id, button_rect))
+            self.steal_buttons.append((player_idx, button_rect))
         
     def draw_steal_selection(self):
         """Draw UI for selecting a player to steal from"""
@@ -609,9 +568,9 @@ class CatanGame:
         self.screen.blit(title_text, title_rect)
         
         # Draw player buttons
-        for player_id, button_rect in self.steal_buttons:
-            player = self.players[player_id - 1]
-            color = PLAYER_COLOR_RGBS[player_id]
+        for player_idx, button_rect in self.steal_buttons:
+            player = self.players[player_idx]
+            color = PLAYER_COLOR_RGBS[player_idx]
             
             pygame.draw.rect(self.screen, color, button_rect)
             pygame.draw.rect(self.screen, TEXT_COLOR, button_rect, 1)  # Border
@@ -625,9 +584,9 @@ class CatanGame:
         if not hasattr(self, 'steal_buttons'):
             return None
             
-        for player_id, button_rect in self.steal_buttons:
+        for player_idx, button_rect in self.steal_buttons:
             if button_rect.collidepoint(mouse_pos):
-                return player_id
+                return player_idx
         return None
     
     def draw_hexes(self):
@@ -640,9 +599,6 @@ class CatanGame:
             color = RESOURCE_COLORS[hex_obj.resource]
             pygame.draw.polygon(self.screen, color, vertices)
             pygame.draw.polygon(self.screen, TEXT_COLOR, vertices, 2)  # Border
-            
-            # Calculate vertical spacing based on circle size
-            vertical_spacing = self.number_circle_radius + 5
             
             # Draw the resource name (at the top)
             # hiding for now
@@ -687,7 +643,7 @@ class CatanGame:
                 color = PLAYER_COLOR_RGBS[road.owner]
 
             # In setup phase with settlement placed, check if road is valid
-            elif self.game_logic.setup_phase_settlement_placed and self.last_settlement_placed is not None:
+            elif self.game_logic.state.setup_phase_settlement_placed and self.last_settlement_placed is not None:
                 valid = self.game_logic.is_valid_initial_road(road_id, self.last_settlement_placed)
                 if valid:
                     color = ROAD_VALID_COLOR
@@ -700,9 +656,9 @@ class CatanGame:
             spot = self.board.get_spot(spot_id)
             
             # Determine spot color based on state
-            if spot.player is not None:
+            if spot.player_idx is not None:
                 # If spot has a settlement, color it by player
-                color_key = PLAYER_COLOR_NAMES[spot.player]
+                color_key = PLAYER_COLOR_NAMES[spot.player_idx]
                 
                 # Select the appropriate image based on the settlement type
                 if spot.settlement_type == SettlementType.SETTLEMENT:
@@ -788,8 +744,8 @@ class CatanGame:
         # Display game phase instructions
         if not self.game_logic.is_setup_complete():
             instructions = self.game_logic.get_setup_instructions()
-            current_player = self.game_logic.get_current_player()
-            player_color = PLAYER_COLOR_RGBS[current_player.player_id]
+            current_player = self.game_logic.state.get_current_player()
+            player_color = PLAYER_COLOR_RGBS[current_player.player_idx]
             
             # Render with player color - use smaller font for instructions in corner panel
             instruction_surface = self.info_font.render(instructions, True, player_color)
@@ -845,13 +801,12 @@ class CatanGame:
         for player in self.players:
             # Player header with background in player's color
             player_rect = pygame.Rect(panel_x + 10, y_pos, panel_width - 20, 30)
-            pygame.draw.rect(self.screen, PLAYER_COLOR_RGBS[player.player_id], player_rect)
+            pygame.draw.rect(self.screen, PLAYER_COLOR_RGBS[player.player_idx], player_rect)
             pygame.draw.rect(self.screen, TEXT_COLOR, player_rect, 1)  # Border
             
  
-
             player_name_string = player.name
-            if player.player_id == self.game_logic.get_current_player().player_id:
+            if player.player_idx == self.game_logic.state.current_player_idx:
                 player_name_string = f"{player_name_string} - (curr turn)"
             player_text = self.info_font.render(player_name_string, True, TEXT_COLOR)            
             self.screen.blit(player_text, (panel_x + 15, y_pos + 5))
@@ -872,8 +827,8 @@ class CatanGame:
             
             # Resources (only show in regular play phase or to the current player in setup phase 2)
             if (self.game_logic.is_setup_complete() or 
-                (self.game_logic.current_phase == GamePhase.SETUP_PHASE_2 and 
-                 player.player_id == self.game_logic.get_current_player().player_id)):
+                (self.game_logic.state.current_phase == GamePhase.SETUP_PHASE_2 and 
+                 player.player_idx == self.game_logic.state.current_player_idx)):
                 
                 y_pos += 5
                 resources_title = self.font.render("Resources:", True, TEXT_COLOR)
@@ -935,7 +890,7 @@ class CatanGame:
 
     def check_hex_click(self, mouse_pos):
         """Check if a hex was clicked (for robber placement)"""
-        if not (self.game_logic.awaiting_robber_placement or self.robber_placement_active):
+        if not (self.game_logic.state.awaiting_robber_placement or self.robber_placement_active):
             return None
             
         for hex_id, center in self.hex_centers.items():
@@ -943,7 +898,7 @@ class CatanGame:
             # Use a generous radius for hex click detection
             if distance <= self.number_circle_radius * 2:
                 # Don't allow placing robber on same hex
-                if hex_id != self.game_logic.robber_hex_id:
+                if hex_id != self.game_logic.state.robber_hex_id:
                     return hex_id
         return None
     def run(self):
@@ -966,7 +921,7 @@ class CatanGame:
                         if mouse_pos[0] < self.window_width * 0.8:
                             # In placement phase - handle selection of two settlements and roads
                             if not self.game_logic.is_setup_complete():
-                                if not self.game_logic.setup_phase_settlement_placed:
+                                if not self.game_logic.state.setup_phase_settlement_placed:
                                     # Attempt to place settlement immediately on click
                                     spot_id = self.check_spot_click(mouse_pos)
                                     if spot_id is not None:
@@ -991,7 +946,7 @@ class CatanGame:
                                 # Regular play phase - handle special states first
                                 
                                 # Robber placement
-                                if self.game_logic.awaiting_robber_placement or self.robber_placement_active:
+                                if self.game_logic.state.awaiting_robber_placement or self.robber_placement_active:
                                     hex_id = self.check_hex_click(mouse_pos)
                                     if hex_id is not None:
                                         success = self.game_logic.move_robber(hex_id)
@@ -999,25 +954,25 @@ class CatanGame:
                                             
                                             print(f"Moved robber to hex {hex_id}")
                                             self.robber_placement_active = False
-                                            if hasattr(self.game_logic, 'potential_victims') and self.game_logic.potential_victims:
-                                                self.setup_steal_from_player(self.game_logic.potential_victims)
+                                            if hasattr(self.game_logic, 'potential_victims') and self.game_logic.state.potential_victims:
+                                                self.setup_steal_from_player(self.game_logic.state.potential_victims)
                                         else:
                                             print(f"Failed to move robber to hex {hex_id}")
                                     continue
                                 if hasattr(self, 'steal_buttons') and self.steal_buttons:
                                     victim_id = self.check_steal_button_click(mouse_pos)
                                     if victim_id is not None:
-                                        self.game_logic.steal_resource_from_player(victim_id)
+                                        self.game_logic.state.steal_resource_from_player(victim_id)
                                         self.steal_buttons = []
                                         continue
                                 # Resource selection for Year of Plenty or Monopoly
                                 resource_action = self.check_resource_selection_click(mouse_pos)
                                 if resource_action:
                                     action_type, resource = resource_action
-                                    if action_type == "year_of_plenty" and self.game_logic.awaiting_resource_selection:
+                                    if action_type == "year_of_plenty" and self.game_logic.state.awaiting_resource_selection:
                                         self.game_logic.select_year_of_plenty_resource(resource)
                                         print(f"Selected {resource.name} for Year of Plenty")
-                                    elif action_type == "monopoly" and self.game_logic.awaiting_monopoly_selection:
+                                    elif action_type == "monopoly" and self.game_logic.state.awaiting_monopoly_selection:
                                         self.game_logic.select_monopoly_resource(resource)
                                         print(f"Selected {resource.name} for Monopoly")
                                     continue
@@ -1064,7 +1019,7 @@ class CatanGame:
                                     continue
 
                                 # Handle road building (from dev card)
-                                if self.game_logic.road_building_roads_placed > 0 and self.game_logic.road_building_roads_placed < 2:
+                                if self.game_logic.state.road_building_roads_placed > 0 and self.game_logic.state.road_building_roads_placed < 2:
                                     road_id = self.check_road_click(mouse_pos)
                                     if road_id is not None:
                                         success = self.game_logic.place_free_road(road_id)
@@ -1078,13 +1033,13 @@ class CatanGame:
                                 spot_id = self.check_spot_click(mouse_pos)
                                 if spot_id is not None:
                                     # Check for build/upgrade actions
-                                    if ("build_settlement", spot_id) in self.game_logic.possible_moves:
+                                    if ("build_settlement", spot_id) in self.game_logic.state.possible_actions:
                                         success = self.game_logic.do_move(("build_settlement", spot_id))
                                         if success:
                                             print(f"Built settlement at spot {spot_id}")
                                         else:
                                             print(f"Failed to build settlement at {spot_id}")
-                                    elif ("upgrade_city", spot_id) in self.game_logic.possible_moves:
+                                    elif ("upgrade_city", spot_id) in self.game_logic.state.possible_actions:
                                         success = self.game_logic.do_move(("upgrade_city", spot_id))
                                         if success:
                                             print(f"Upgraded to city at spot {spot_id}")
@@ -1097,7 +1052,7 @@ class CatanGame:
                                 # Build road
                                 road_id = self.check_road_click(mouse_pos)
                                 if road_id is not None:
-                                    if ("road", road_id) in self.game_logic.possible_moves:
+                                    if ("road", road_id) in self.game_logic.state.possible_actions:
                                         success = self.game_logic.do_move(("road", road_id))
                                         if success:
                                             print(f"Built road at {road_id}")

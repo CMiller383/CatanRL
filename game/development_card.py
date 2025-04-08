@@ -1,12 +1,7 @@
-from enum import Enum
 import random
 
-class DevCardType(Enum):
-    KNIGHT = "knight"
-    VICTORY_POINT = "victory_point"
-    ROAD_BUILDING = "road_building"
-    YEAR_OF_PLENTY = "year_of_plenty"
-    MONOPOLY = "monopoly"
+from game.enums import DevCardType
+
 
 class DevelopmentCard:
     def __init__(self, card_type: DevCardType, name: str):

@@ -1,11 +1,11 @@
 from collections import defaultdict
-from .resource import Resource
+from .enums import Resource
 from .development_card import DevCardType
 
 class Player:
-    def __init__(self, player_id: int, name: str = ""):
-        self.player_id = player_id
-        self.name = name or f"Player {player_id}"
+    def __init__(self, player_idx: int, name: str = ""):
+        self.player_idx = player_idx
+        self.name = name or f"Player {player_idx}"
         self.settlements = []  # List of spot IDs where settlements are built
         self.roads = []        # List of road ids owned by the player
         self.resources = defaultdict(int)  # Maps Resource to count
