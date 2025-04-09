@@ -2,7 +2,7 @@ from agent.base import AgentType
 from gui.catan_game import CatanGame
 
 def main():
-    agent_types = [AgentType.HEURISTIC] * 4
+    agent_types = [AgentType.RANDOM] * 4
     agent_types[0] = AgentType.HUMAN
 
     # Start the game with selected setup

@@ -6,9 +6,6 @@ def roll_dice(state):
     if state.current_phase != GamePhase.REGULAR_PLAY:
         return False
     
-    if "roll_dice" not in state.possible_actions:
-        return False
-    
     state.dice1_roll = random.randint(1, 6)
     state.dice2_roll = random.randint(1, 6)
 
@@ -27,9 +24,6 @@ def roll_dice(state):
 def end_turn(state):
     if not (state.rolled_dice and state.current_phase == GamePhase.REGULAR_PLAY):
         return False
-
-    if "end_turn" not in state.possible_actions:
-        return False
     
     # Reset turn flags
     state.rolled_dice = False
@@ -45,9 +39,6 @@ def end_turn(state):
     return True
 
 def place_road(state, road_id):
-    if ("road", road_id) not in state.possible_actions:
-        return False
-    
     new_road = state.board.get_road(road_id)
     curr_player = state.get_current_player()
 
@@ -59,9 +50,6 @@ def place_road(state, road_id):
 
 def build_settlement(state, spot_id):
     """Build a settlement at a spot"""
-    if ("build_settlement", spot_id) not in state.possible_actions:
-        return False
-    
     spot = state.board.get_spot(spot_id)
     player = state.get_current_player()
     
@@ -73,10 +61,6 @@ def build_settlement(state, spot_id):
 
 def upgrade_to_city(state, spot_id):
     """Upgrade a settlement to a city"""
-
-    if ("upgrade_city", spot_id) not in state.possible_actions:
-        return False
-    
     spot = state.board.get_spot(spot_id)
     player = state.get_current_player()
     
@@ -88,9 +72,6 @@ def upgrade_to_city(state, spot_id):
 
 def buy_development_card(state):
     """Buy a development card from the deck"""
-
-    if "buy_dev_card" not in state.possible_actions:
-        return False
         
     curr_player = state.get_current_player()
     
@@ -107,9 +88,6 @@ def buy_development_card(state):
 
 def play_knight_card(state):
     """Play a knight development card"""
-
-    if "play_knight" not in state.possible_actions:
-        return False
         
     curr_player = state.get_current_player()
     
@@ -136,15 +114,10 @@ def play_knight_card(state):
         state.largest_army_player = curr_player.player_idx
         state.largest_army_size = curr_player.knights_played
     
-    state.possible_actions = state.get_possible_actions()
     return True
 
 def play_road_building_card(state):
     """Play a road building development card"""
-
-    if "play_road_building" not in state.possible_actions:
-        return False
-        
     curr_player = state.get_current_player()
     
     # Find a road building card in the player's hand (not just purchased)
@@ -168,9 +141,6 @@ def play_road_building_card(state):
 
 def play_year_of_plenty_card(state):
     """Play a year of plenty development card"""
-
-    if "play_year_of_plenty" not in state.possible_actions:
-        return False
         
     curr_player = state.get_current_player()
     
@@ -197,10 +167,6 @@ def play_year_of_plenty_card(state):
 def play_monopoly_card(state):
     """Play a monopoly development card"""
 
-    if "play_monopoly" not in state.possible_actions:
-        return False
-    
-        
     curr_player = state.get_current_player()
     
     # Find a monopoly card in the player's hand (not just purchased)

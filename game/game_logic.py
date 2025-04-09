@@ -1,13 +1,9 @@
 from game.player_actions import build_settlement, buy_development_card, end_turn, move_robber, place_free_road, place_road, play_knight_card, play_monopoly_card, play_road_building_card, play_year_of_plenty_card, roll_dice, select_monopoly_resource, select_year_of_plenty_resource, upgrade_to_city
 from game.possible_action_generator import get_possible_actions
 from game.setup import place_initial_road, place_initial_settlement
-from .enums import DevCardType, GamePhase
+from .enums import ActionType, GamePhase
 from game.game_state import GameState
-from .spot import SettlementType
-from .enums import Resource
 from .player import Player
-
-
 from agent.base import AgentType, create_agent
 
 class GameLogic:
@@ -41,51 +37,50 @@ class GameLogic:
     def user_can_end_turn(self):
         return "end_turn" in self.state.possible_actions and self.is_current_player_human()
     
-    def do_action(self, move):
+    def do_action(self, action):
         """Execute a game move"""
         state = self.state
 
-        print("doing a move")
+        print(action)
         print(state.possible_actions)
-        print(move)
 
-        if state.current_phase != GamePhase.REGULAR_PLAY or move not in state.possible_actions:
+        if state.current_phase != GamePhase.REGULAR_PLAY or action not in state.possible_actions:
             return False
         
-        if not isinstance(move, tuple):
-            # Handle string moves
-            if move == "roll_dice":
-                success =  roll_dice(state)
-            elif move == "end_turn":
+        match action.type:
+            case ActionType.ROLL_DICE:
+                print("here")
+                success = roll_dice(state)
+            case ActionType.END_TURN:
                 success = end_turn(state)
-            elif move == "buy_dev_card":
-                success =  buy_development_card(state)
-            elif move == "play_knight":
+            case ActionType.BUY_DEV_CARD:
+                success = buy_development_card(state)
+            case ActionType.PLAY_KNIGHT_CARD:
                 success = play_knight_card(state)
-            elif move == "play_road_building":
+            case ActionType.PLAY_ROAD_BUILDING_CARD:
                 success = play_road_building_card(state)
-            elif move == "play_year_of_plenty":
+            case ActionType.PLAY_YEAR_OF_PLENTY_CARD:
                 success = play_year_of_plenty_card(state)
-            elif move == "play_monopoly":
+            case ActionType.PLAY_MONOPOLY_CARD:
                 success = play_monopoly_card(state)
-        else:
-            # Handle tuple moves
-            action, data = move
-            if action == "build_settlement":
-                success = build_settlement(state, data)
-            elif action == "upgrade_city":
-                success = upgrade_to_city(state, data)
-            elif action == "road":
-                success = place_road(state, data)
-            elif action == "free_road":
-                success = place_free_road(state, data)
-            elif action == "select_resource":
-                success = select_year_of_plenty_resource(state, data)
-            elif action == "select_monopoly":
-                success = select_monopoly_resource(state, data)
-            elif action == "move_robber":
-                success = move_robber(state, data)
-        
+            case ActionType.BUILD_SETTLEMENT:
+                success = build_settlement(state, action.payload)
+            case ActionType.UPGRADE_TO_CITY:
+                success = upgrade_to_city(state, action.payload)
+            case ActionType.BUILD_ROAD:
+                success = place_road(state, action.payload)
+            case ActionType.PLACE_FREE_ROAD:
+                success = place_free_road(state, action.payload)
+            case ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE:
+                success = select_year_of_plenty_resource(state, action.payload)
+            case ActionType.SELECT_MONOPOLY_RESOURCE:
+                success = select_monopoly_resource(state, action.payload)
+            case ActionType.MOVE_ROBBER:
+                success = move_robber(state, action.payload)
+            case _:
+                success = False
+
+        print(success)
         if success:
             state.possible_actions = get_possible_actions(state)
 
@@ -117,11 +112,11 @@ class GameLogic:
                 return True
         
         action = agent.get_action(state)
-        while action != "end_turn":
+        while action.type != ActionType.END_TURN:
             self.do_action(action)
             action = agent.get_action(state)
 
-        self.do_action("end_turn")
+        self.do_action(action)
 
     def create_agent(player_idx, agent_type):
         if agent_type == AgentType.HUMAN:

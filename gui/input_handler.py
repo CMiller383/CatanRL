@@ -3,6 +3,8 @@ Input handler for the Catan game GUI.
 """
 import math
 
+from game.action import Action
+from game.enums import ActionType
 from game.setup import place_initial_road, place_initial_settlement
 
 class InputHandler:
@@ -86,7 +88,7 @@ class InputHandler:
             
         # Check if end turn button was clicked
         if self.check_end_turn_button(mouse_pos):
-            self.game_logic.do_action("end_turn")
+            self.game_logic.do_action(Action(ActionType.END_TURN))
             return
 
         # In placement phase - handle selection of two settlements and roads
@@ -119,7 +121,7 @@ class InputHandler:
         if self.game_logic.state.awaiting_robber_placement or self.robber_placement_active:
             hex_id = self.check_hex_click(mouse_pos)
             if hex_id is not None:
-                success = self.game_logic.do_action(("move_robber", hex_id))
+                success = self.game_logic.do_action(Action(ActionType.MOVE_ROBBER, hex_id))
                 if success:
                     print(f"Moved robber to hex {hex_id}")
                     self.robber_placement_active = False
@@ -133,7 +135,7 @@ class InputHandler:
         if 'steal' in self.ui_handlers and self.ui_handlers['steal'].steal_buttons:
             victim_id = self.ui_handlers['steal'].check_steal_button_click(mouse_pos)
             if victim_id is not None:
-                self.game_logic.do_action(("steal", victim_id))
+                self.game_logic.do_action(Action(ActionType.STEAL, victim_id))
                 self.ui_handlers['steal'].clear_steal_selection()
                 return
                 
@@ -143,11 +145,11 @@ class InputHandler:
             if resource_action:
                 action_type, resource = resource_action
                 if action_type == "year_of_plenty" and self.game_logic.state.awaiting_resource_selection:
-                    self.game_logic.do_action(("select_resource", resource))
+                    self.game_logic.do_action(Action(ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Year of Plenty")
                 elif action_type == "monopoly" and self.game_logic.state.awaiting_monopoly_selection:
                     self.game_logic.select_monopoly_resource(resource)
-                    self.game_logic.do_action(("select_monopoly", resource))
+                    self.game_logic.do_action(Action(ActionType.SELECT_MONOPOLY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Monopoly")
                 return
                 
@@ -161,26 +163,26 @@ class InputHandler:
             dev_card_action = self.ui_handlers['devcards'].check_dev_card_action_click(mouse_pos)
             if dev_card_action:
                 if dev_card_action == "buy_dev_card":
-                    success = self.game_logic.do_action("buy_dev_card")
+                    success = self.game_logic.do_action(Action(ActionType.BUY_DEV_CARD))
                     if success:
                         print("Bought development card")
                     else:
                         print("Failed to buy development card")
                 elif dev_card_action == "play_knight":
-                    success = self.game_logic.do_action("play_knight")
+                    success = self.game_logic.do_action(Action(ActionType.PLAY_KNIGHT_CARD))
                     if success:
                         print("Played Knight card")
                         self.robber_placement_active = True
                 elif dev_card_action == "play_road_building":
-                    success = self.game_logic.do_action("play_road_building")
+                    success = self.game_logic.do_action(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
                     if success:
                         print("Played Road Building card")
                 elif dev_card_action == "play_year_of_plenty":
-                    success = self.game_logic.do_action("play_year_of_plenty")
+                    success = self.game_logic.do_action(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
                     if success:
                         print("Played Year of Plenty card")
                 elif dev_card_action == "play_monopoly":
-                    success = self.game_logic.do_action("play_monopoly")
+                    success = self.game_logic.do_action(Action(ActionType.PLAY_MONOPOLY_CARD))
                     if success:
                         print("Played Monopoly card")
                 
@@ -190,7 +192,7 @@ class InputHandler:
             
         # Roll dice
         if self.check_dice_click(mouse_pos):
-            self.game_logic.do_action("roll_dice")
+            self.game_logic.do_action(Action(ActionType.ROLL_DICE))
             return
 
         # Handle road building (from dev card)
@@ -209,13 +211,13 @@ class InputHandler:
         if spot_id is not None:
             # Check for build/upgrade actions
             if ("build_settlement", spot_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(("build_settlement", spot_id))
+                success = self.game_logic.do_action(Action(ActionType.BUILD_SETTLEMENT, spot_id))
                 if success:
                     print(f"Built settlement at spot {spot_id}")
                 else:
                     print(f"Failed to build settlement at {spot_id}")
             elif ("upgrade_city", spot_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(("upgrade_city", spot_id))
+                success = self.game_logic.do_action(Action(ActionType.UPGRADE_TO_CITY, spot_id))
                 if success:
                     print(f"Upgraded to city at spot {spot_id}")
                 else:
@@ -228,7 +230,7 @@ class InputHandler:
         road_id = self.check_road_click(mouse_pos)
         if road_id is not None:
             if ("road", road_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(("road", road_id))
+                success = self.game_logic.do_action(Action(ActionType.BUILD_ROAD, road_id))
                 if success:
                     print(f"Built road at {road_id}")
                 else:

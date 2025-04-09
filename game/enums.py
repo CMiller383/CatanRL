@@ -32,7 +32,7 @@ class ActionType(Enum):
     END_TURN = "end_turn"
     BUILD_SETTLEMENT = "build_settlement"
     UPGRADE_TO_CITY = "upgrade_city"
-    PLACE_ROAD = "place_road"
+    BUILD_ROAD = "build_road"
     PLACE_FREE_ROAD = "place_free_road"
     BUY_DEV_CARD = "buy_dev_card"
     PLAY_KNIGHT_CARD = "play_knight_card"
