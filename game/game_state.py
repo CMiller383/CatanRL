@@ -17,6 +17,8 @@ class GameState:
         self.rolled_dice = False
         self.possible_actions = set()
 
+        self.turn_number = 0
+
         self.dev_card_deck = DevelopmentCardDeck()
 
         # state for dev cards
@@ -28,6 +30,7 @@ class GameState:
         self.awaiting_resource_selection_count = 0  # For Year of Plenty
         self.awaiting_monopoly_selection = False
         self.road_building_roads_placed = 0
+        self.awaiting_road_builder_placements = False
 
         for hex_id, hex_obj in self.board.hexes.items():
             if hex_obj.resource == Resource.DESERT:
@@ -41,6 +44,8 @@ class GameState:
         # road
         self.longest_road_player = None
         self.longest_road_length = 4  # at least 5 roads 
+
+        self.winner = None
     
     def get_current_player(self):
         return self.players[self.current_player_idx]

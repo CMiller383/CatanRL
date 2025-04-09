@@ -38,7 +38,6 @@ def handle_robber_roll(state):
             
             # =================== NEED TO LET THEM CHOOSE TO DISCARD RESOURCES HERE ======================
             auto_discard_resources(player, discard_count)
-
     
     # Set flag to await robber placement
     state.awaiting_robber_placement = True

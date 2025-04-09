@@ -11,20 +11,16 @@ class Player:
         self.resources = defaultdict(int)  # Maps Resource to count
         self.cities = []       # List of spot IDs where cities are built
         self.knights_played = 0
-
-        #maxes
-        self.MAX_SETTLEMENTS = 5
-        self.MAX_CITIES = 4
-        self.MAX_ROADS = 15
+        self.victory_points = 0
 
         #dev cards
         self.dev_cards = []
         self.played_dev_cards = []
-        self.just_purchased_dev_card = False
 
     def add_settlement(self, spot_id: int):
-        if len(self.settlements) < 15:
+        if len(self.settlements) < 5:
             self.settlements.append(spot_id)
+            self.victory_points += 1
             return True
         return False
 
@@ -35,10 +31,11 @@ class Player:
         return False
     
     def add_city(self, spot_id: int):
-        if len(self.cities) < self.MAX_CITIES:
+        if len(self.cities) < 4:
             if spot_id in self.settlements:
                 self.settlements.remove(spot_id)
             self.cities.append(spot_id)
+            self.victory_points += 1
             return True
         return False
     
@@ -46,7 +43,7 @@ class Player:
         self.resources[resource] += amount
 
     def has_city_resources(self):
-        if self.resources[Resource.WHEAT] >= 2 and self.resources[Resource.ORE] >= 3 and len(self.cities) < self.MAX_CITIES:
+        if self.resources[Resource.WHEAT] >= 2 and self.resources[Resource.ORE] >= 3 and len(self.cities) < 4:
             return True
         else:
             return False
@@ -58,13 +55,13 @@ class Player:
 
     def has_settlement_resources(self):
         if (self.resources[Resource.WHEAT] >= 1 and self.resources[Resource.SHEEP] >= 1 and
-                self.resources[Resource.BRICK] >= 1 and self.resources[Resource.WOOD] >= 1) and len(self.settlements) < self.MAX_SETTLEMENTS:
+                self.resources[Resource.BRICK] >= 1 and self.resources[Resource.WOOD] >= 1) and len(self.settlements) < 5:
             return True
         else:
             return False
         
     def buy_settlement(self):
-        if self.has_settlement_resources() and len(self.settlements) < self.MAX_SETTLEMENTS:
+        if self.has_settlement_resources() and len(self.settlements) < 5:
             self.resources[Resource.BRICK] -= 1
             self.resources[Resource.WOOD] -= 1
             self.resources[Resource.WHEAT] -= 1
@@ -73,13 +70,13 @@ class Player:
         return False
 
     def has_road_resources(self):
-        if self.resources[Resource.BRICK] >= 1 and self.resources[Resource.WOOD] >= 1 and len(self.roads) < self.MAX_ROADS:
+        if self.resources[Resource.BRICK] >= 1 and self.resources[Resource.WOOD] >= 1 and len(self.roads) < 15:
             return True
         else:
             return False
         
     def buy_road(self):
-        if self.has_road_resources() and len(self.roads) < self.MAX_ROADS:
+        if self.has_road_resources() and len(self.roads) < 15:
             self.resources[Resource.BRICK] -= 1
             self.resources[Resource.WOOD] -= 1
             return True
@@ -96,15 +93,15 @@ class Player:
             self.resources[Resource.WHEAT] -= 1
             self.resources[Resource.SHEEP] -= 1
             self.dev_cards.append(card)
-            self.just_purchased_dev_card = True
+
+            if card.card_type == DevCardType.VICTORY_POINT:
+                self.victory_points += 1
+
             return True
         return False
     
     def play_dev_card(self, card_idx):
         if 0 <= card_idx < len(self.dev_cards):
-            if self.just_purchased_dev_card and card_idx == len(self.dev_cards) - 1:
-                return False
-                
             card = self.dev_cards.pop(card_idx)
             self.played_dev_cards.append(card)
             
@@ -113,22 +110,6 @@ class Player:
                 
             return card
         return None
-    
-    def reset_dev_card_purchase_flag(self):
-        self.just_purchased_dev_card = False
-    
-    def get_victory_points(self):
-        """Calculate total victory points"""
-        # 1 point per settlement, 2 per city
-        settlement_points = len(self.settlements)
-        city_points = len(self.cities) * 2
-        
-        # Count victory point cards
-        vp_card_points = sum(1 for card in self.dev_cards + self.played_dev_cards 
-                          if card.card_type == DevCardType.VICTORY_POINT)
-        
-        # Add other victory points (longest road, largest army) handled by the game logic
-        return settlement_points + city_points + vp_card_points
 
     def __repr__(self):
         return f"Player(id={self.player_id}, name={self.name})"

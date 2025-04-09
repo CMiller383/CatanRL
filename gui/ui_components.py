@@ -95,29 +95,7 @@ class DevCardHandler:
                 card_x = panel_x + card_spacing + col * (card_width + card_spacing)
                 card_y = card_area_y + row * (card_height + 10)
                 
-                # Check if card is playable
-                can_play = False
-                just_purchased = curr_player.just_purchased_dev_card and i == len(curr_player.dev_cards) - 1
-                
-                if not just_purchased and not self.game_logic.state.dev_card_played_this_turn:
-                    if card.card_type == DevCardType.KNIGHT and "play_knight" in self.game_logic.state.possible_actions:
-                        can_play = True
-                    elif card.card_type == DevCardType.ROAD_BUILDING and "play_road_building" in self.game_logic.state.possible_actions:
-                        can_play = True
-                    elif card.card_type == DevCardType.YEAR_OF_PLENTY and "play_year_of_plenty" in self.game_logic.state.possible_actions:
-                        can_play = True
-                    elif card.card_type == DevCardType.MONOPOLY and "play_monopoly" in self.game_logic.state.possible_actions:
-                        can_play = True
-                
-                # Determine card color based on state
-                if self.selected_dev_card == i:
-                    card_color = DEV_CARD_SELECTED_COLOR
-                elif just_purchased:
-                    card_color = DEV_CARD_DISABLED_COLOR
-                elif can_play:
-                    card_color = DEV_CARD_ENABLED_COLOR
-                else:
-                    card_color = DEV_CARD_COLOR if card.card_type != DevCardType.VICTORY_POINT else (255, 223, 0)  # Gold for VP cards
+                card_color = DEV_CARD_COLOR if card.card_type != DevCardType.VICTORY_POINT else (255, 223, 0)  # Gold for VP cards
                 
                 # Draw card background
                 card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
@@ -141,19 +119,7 @@ class DevCardHandler:
                     self.screen.blit(card_type_text, card_type_rect)
                 
                 # Store card button for click detection if playable
-                if can_play:
-                    self.dev_card_buttons.append((i, card_rect))
-                elif card.card_type == DevCardType.VICTORY_POINT:
-                    # Display Victory Point value
-                    vp_text = self.card_desc_font.render("+1 VP", True, TEXT_COLOR)
-                    vp_rect = vp_text.get_rect(center=(card_x + card_width // 2, card_y + card_height - 15))
-                    self.screen.blit(vp_text, vp_rect)
-                
-                # Show "New" label for just purchased cards
-                if just_purchased:
-                    new_text = self.card_desc_font.render("NEW", True, (255, 0, 0))
-                    new_rect = new_text.get_rect(center=(card_x + card_width // 2, card_y + card_height - 15))
-                    self.screen.blit(new_text, new_rect)
+                self.dev_card_buttons.append((i, card_rect))
             
             # If a card is selected, show action buttons
             if self.selected_dev_card is not None:
@@ -161,7 +127,7 @@ class DevCardHandler:
                 
                 # Play card button
                 selected_card = curr_player.dev_cards[self.selected_dev_card]
-                if selected_card.card_type != DevCardType.VICTORY_POINT and not (curr_player.just_purchased_dev_card and self.selected_dev_card == len(curr_player.dev_cards) - 1):
+                if selected_card.card_type != DevCardType.VICTORY_POINT:
                     play_button_width = 100
                     play_button_x = panel_x + panel_width // 2 - play_button_width // 2
                     
@@ -224,7 +190,7 @@ class ResourceSelectionHandler:
         # Title
         if self.game_logic.state.awaiting_resource_selection:
             title = "Select Resource (Year of Plenty)"
-            count_text = f"Select {self.game_logic.awaiting_resource_selection_count} resource(s)"
+            count_text = f"Select {self.game_logic.state.awaiting_resource_selection_count} resource(s)"
         else:
             title = "Select Resource (Monopoly)"
             count_text = "Choose one resource to take from all players"

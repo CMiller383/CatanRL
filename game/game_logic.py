@@ -43,6 +43,7 @@ class GameLogic:
         state = self.state
         print(state.current_player_idx)
         print(action)
+        print(state.possible_actions)
         
 
         if state.current_phase != GamePhase.REGULAR_PLAY or action not in state.possible_actions:

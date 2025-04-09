@@ -30,12 +30,9 @@ def end_turn(state):
     state.dev_card_played_this_turn = False
     state.road_building_roads_placed = 0
     
-    # Reset the development card purchase flag
-    state.get_current_player().reset_dev_card_purchase_flag()
-    
     # Move to next player
     state.current_player_idx = (state.current_player_idx + 1) % 4
-    
+    state.turn_number += 1
     return True
 
 def place_road(state, road_id):
@@ -81,6 +78,7 @@ def buy_development_card(state):
         
     # Draw a card and give it to the player
     card = state.dev_card_deck.draw_card()
+    card.turn_bought = state.turn_number
     success = curr_player.buy_dev_card(card)
     
     return success
@@ -94,7 +92,7 @@ def play_knight_card(state):
     # Find a knight card in the player's hand (not just purchased)
     knight_indices = [i for i, card in enumerate(curr_player.dev_cards) 
                     if card.card_type == DevCardType.KNIGHT and 
-                    (not curr_player.just_purchased_dev_card or i < len(curr_player.dev_cards) - 1)]
+                    card.turn_bought < state.turn_number]
     
     if not knight_indices:
         return False
@@ -111,9 +109,12 @@ def play_knight_card(state):
     # Check for largest army
     if curr_player.knights_played >= 3 and (state.largest_army_player is None or 
                                         curr_player.knights_played > state.largest_army_size):
+        if state.largest_army_player:
+            state.players[state.largest_army_player].victory_points -= 2
+        curr_player.victory_points += 2
         state.largest_army_player = curr_player.player_idx
         state.largest_army_size = curr_player.knights_played
-    
+
     return True
 
 def play_road_building_card(state):
@@ -123,7 +124,7 @@ def play_road_building_card(state):
     # Find a road building card in the player's hand (not just purchased)
     road_indices = [i for i, card in enumerate(curr_player.dev_cards) 
                 if card.card_type == DevCardType.ROAD_BUILDING and 
-                (not curr_player.just_purchased_dev_card or i < len(curr_player.dev_cards) - 1)]
+                card.turn_bought < state.turn_number]
     
     if not road_indices:
         return False
@@ -136,6 +137,7 @@ def play_road_building_card(state):
     # Set flags and wait for road placement
     state.dev_card_played_this_turn = True
     state.road_building_roads_placed = 0
+    state.awaiting_road_builder_placements = True
     
     return True
 
@@ -147,7 +149,7 @@ def play_year_of_plenty_card(state):
     # Find a year of plenty card in the player's hand (not just purchased)
     yop_indices = [i for i, card in enumerate(curr_player.dev_cards) 
                 if card.card_type == DevCardType.YEAR_OF_PLENTY and 
-                (not curr_player.just_purchased_dev_card or i < len(curr_player.dev_cards) - 1)]
+                card.turn_bought < state.turn_number]
     
     if not yop_indices:
         return False
@@ -172,7 +174,7 @@ def play_monopoly_card(state):
     # Find a monopoly card in the player's hand (not just purchased)
     monopoly_indices = [i for i, card in enumerate(curr_player.dev_cards) 
                     if card.card_type == DevCardType.MONOPOLY and 
-                    (not curr_player.just_purchased_dev_card or i < len(curr_player.dev_cards) - 1)]
+                    card.turn_bought < state.turn_number]
     
     if not monopoly_indices:
         return False
@@ -260,6 +262,8 @@ def place_free_road(state, road_id):
     curr_player.add_road(road_id)
     
     state.road_building_roads_placed += 1
+    if state.road_building_roads_placed == 2:
+        state.awaiting_road_builder_placements = False
     
     return True
 

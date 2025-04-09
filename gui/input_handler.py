@@ -155,7 +155,6 @@ class InputHandler:
                     self.game_logic.do_action(Action(ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Year of Plenty")
                 elif action_type == "monopoly":
-                    self.game_logic.select_monopoly_resource(resource)
                     self.game_logic.do_action(Action(ActionType.SELECT_MONOPOLY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Monopoly")
                 return

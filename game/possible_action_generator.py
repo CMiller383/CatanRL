@@ -8,6 +8,12 @@ def get_possible_actions(state):
 
     if state.current_phase != GamePhase.REGULAR_PLAY:
         return actions
+    
+    for player in state.players:
+        if player.victory_points >= 10:
+            state.winner = player.player_idx
+            print(f"{player.player_idx} won")
+            return actions
 
     # Special one-at-a-time interactions
     if state.awaiting_robber_placement:
@@ -35,8 +41,8 @@ def get_possible_actions(state):
             if resource != Resource.DESERT:
                 actions.add(Action(ActionType.SELECT_MONOPOLY_RESOURCE, payload=resource))
         return actions
-
-    if 0 < state.road_building_roads_placed < 2:
+    
+    if state.awaiting_road_builder_placements:
         for road_id, road in state.board.roads.items():
             if road.owner is None and is_road_connected(state, road_id):
                 actions.add(Action(ActionType.PLACE_FREE_ROAD, payload=road_id))
@@ -52,8 +58,7 @@ def get_possible_actions(state):
         if not state.dev_card_played_this_turn:
             knight_indices = [
                 i for i, card in enumerate(curr_player.dev_cards)
-                if card.card_type == DevCardType.KNIGHT and
-                   (not curr_player.just_purchased_dev_card or i < len(curr_player.dev_cards) - 1)
+                if card.card_type == DevCardType.KNIGHT and card.turn_bought < state.turn_number
             ]
             if knight_indices:
                 actions.add(Action(ActionType.PLAY_KNIGHT_CARD))
@@ -66,13 +71,16 @@ def get_possible_actions(state):
         actions.add(Action(ActionType.BUY_DEV_CARD))
 
     if not state.dev_card_played_this_turn:
-        check_cards = curr_player.dev_cards[:-1] if curr_player.just_purchased_dev_card else curr_player.dev_cards
-
+        check_cards = []
+        for card in curr_player.dev_cards:
+            if card.turn_bought < state.turn_number:
+                check_cards.append(card)
+                
         if any(card.card_type == DevCardType.KNIGHT for card in check_cards):
             actions.add(Action(ActionType.PLAY_KNIGHT_CARD))
 
         if any(card.card_type == DevCardType.ROAD_BUILDING for card in check_cards):
-            if len(curr_player.roads) < curr_player.MAX_ROADS - 1:
+            if len(curr_player.roads) < 14:
                 actions.add(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
 
         if any(card.card_type == DevCardType.YEAR_OF_PLENTY for card in check_cards):
@@ -82,21 +90,21 @@ def get_possible_actions(state):
             actions.add(Action(ActionType.PLAY_MONOPOLY_CARD))
 
     # Build settlement
-    if curr_player.has_settlement_resources() and len(curr_player.settlements) < curr_player.MAX_SETTLEMENTS:
+    if curr_player.has_settlement_resources() and len(curr_player.settlements) < 5:
         for spot_id, spot in state.board.spots.items():
             if spot.player_idx is None:
                 if has_adjacent_road(state, spot_id, curr_player.player_idx) and is_two_spots_away_from_settlement(state, spot_id):
                     actions.add(Action(ActionType.BUILD_SETTLEMENT, payload=spot_id))
 
     # Upgrade to city
-    if curr_player.has_city_resources() and hasattr(curr_player, 'cities') and len(curr_player.cities) < curr_player.MAX_CITIES:
+    if curr_player.has_city_resources() and hasattr(curr_player, 'cities') and len(curr_player.cities) < 4:
         for spot_id in curr_player.settlements:
             spot = state.board.get_spot(spot_id)
             if spot and spot.settlement_type == SettlementType.SETTLEMENT:
                 actions.add(Action(ActionType.UPGRADE_TO_CITY, payload=spot_id))
 
     # Build road
-    if curr_player.has_road_resources() and len(curr_player.roads) < curr_player.MAX_ROADS:
+    if curr_player.has_road_resources() and len(curr_player.roads) < 15:
         for road_id, road in state.board.roads.items():
             if road.owner is None and is_road_connected(state, road_id):
                 actions.add(Action(ActionType.BUILD_ROAD, payload=road_id))

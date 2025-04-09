@@ -353,12 +353,12 @@ class Renderer:
             y_pos += 35
             
             # Settlements and Roads count
-            settlements_text = self.font.render(f"Settlements: {len(player.settlements)}", True, TEXT_COLOR)
-            self.screen.blit(settlements_text, (panel_x + 15, y_pos))
+            points_text = self.font.render(f"Points: {player.victory_points}", True, TEXT_COLOR)
+            self.screen.blit(points_text, (panel_x + 15, y_pos))
             y_pos += 20
             
-            roads_text = self.font.render(f"Roads: {len(player.roads)}", True, TEXT_COLOR)
-            self.screen.blit(roads_text, (panel_x + 15, y_pos))
+            dev_text = self.font.render(f"Dev cards: {len(player.dev_cards)}", True, TEXT_COLOR)
+            self.screen.blit(dev_text, (panel_x + 15, y_pos))
             y_pos += 20
             
             # Resource Cards

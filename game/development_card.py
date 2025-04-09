@@ -4,9 +4,10 @@ from game.enums import DevCardType
 
 
 class DevelopmentCard:
-    def __init__(self, card_type: DevCardType, name: str):
+    def __init__(self, card_type: DevCardType, name: str, turn_bought: int = None):
         self.card_type = card_type
         self.name = name
+        self.turn_bought = None
         self.played = False
         
     def __repr__(self):
