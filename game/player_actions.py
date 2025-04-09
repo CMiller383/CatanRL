@@ -1,6 +1,8 @@
 import random
 from game.enums import DevCardType, GamePhase, SettlementType
 from game.resource_manager import distribute_resources, handle_robber_roll
+from game.road_utils import update_longest_road
+from game.game_state import check_game_over
 
 def roll_dice(state):
     if state.current_phase != GamePhase.REGULAR_PLAY:
@@ -43,6 +45,10 @@ def place_road(state, road_id):
     new_road.build_road(curr_player.player_idx)
     curr_player.add_road(road_id)
 
+    update_longest_road(state)
+
+    check_game_over(state)
+
     return True
 
 def build_settlement(state, spot_id):
@@ -54,6 +60,7 @@ def build_settlement(state, spot_id):
     player.buy_settlement()
     player.add_settlement(spot_id)
     
+    check_game_over(state)
     return True
 
 def upgrade_to_city(state, spot_id):
@@ -64,7 +71,7 @@ def upgrade_to_city(state, spot_id):
     spot.build_settlement(player.player_idx, SettlementType.CITY)
     player.buy_city()
     player.add_city(spot_id)
-    
+    check_game_over(state)
     return True
 
 def buy_development_card(state):
@@ -260,6 +267,9 @@ def place_free_road(state, road_id):
     # Place road without cost
     road.build_road(curr_player.player_idx)
     curr_player.add_road(road_id)
+
+    update_longest_road(state)
+    check_game_over(state)
     
     state.road_building_roads_placed += 1
     if state.road_building_roads_placed == 2:

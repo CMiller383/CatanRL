@@ -2,6 +2,7 @@ from game.enums import GamePhase, SettlementType
 from game.possible_action_generator import get_possible_actions
 from game.resource_manager import give_initial_resources
 from game.rules import is_two_spots_away_from_settlement, is_valid_initial_road
+from game.road_utils import update_longest_road
 
 
 def place_initial_settlement(state, spot_id):
@@ -74,6 +75,7 @@ def advance_setup_phase(state):
         # If we've gone through all players in reverse order
         if state.current_player_idx == 0:
             state.current_phase = GamePhase.REGULAR_PLAY
+            update_longest_road(state)
             state.possible_actions = get_possible_actions(state)
         else: 
             state.current_player_idx -= 1

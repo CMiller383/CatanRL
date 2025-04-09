@@ -1,0 +1,14 @@
+AlphaZero Catan Training started at 20250409_180653
+Configuration: {'state_dim': 992, 'action_dim': 200, 'hidden_dim': 128, 'num_simulations': 10, 'self_play_games': 1, 'eval_games': 1, 'epochs': 1, 'batch_size': 16, 'buffer_size': 1000, 'max_moves': 50, 'learning_rate': 0.001, 'model_dir': 'models', 'num_iterations': 1}
+
+=== Iteration 1/1 ===
+Starting self-play...
+Self-play completed in 20.56s
+Generated 50 training examples
+Training network...
+Iteration 1 completed in 20.58s
+
+=== Training Completed ===
+Total time: 20.58s (0.01h)
+Checkpoint saved to models\model_iter_1.pt
+Plotly metrics visualization saved to plots/training_metrics.html

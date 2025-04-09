@@ -1,7 +1,7 @@
 from game.action import Action
 from game.enums import ActionType, DevCardType, GamePhase, Resource, SettlementType
 from game.rules import has_adjacent_road, is_road_connected, is_two_spots_away_from_settlement
-
+from game.game_state import check_game_over
 
 def get_possible_actions(state):
     actions = set()
@@ -9,11 +9,8 @@ def get_possible_actions(state):
     if state.current_phase != GamePhase.REGULAR_PLAY:
         return actions
     
-    for player in state.players:
-        if player.victory_points >= 10:
-            state.winner = player.player_idx
-            print(f"{player.player_idx} won")
-            return actions
+    if check_game_over(state):
+        return actions
 
     # Special one-at-a-time interactions
     if state.awaiting_robber_placement:

@@ -50,4 +50,16 @@ class GameState:
     def get_current_player(self): ##please dont remove thiis i know its not necessary but i tried to get rid of it and it broke everything
         return self.players[self.current_player_idx]
     
+def check_game_over(state):
+    """Check if the game is over."""
+    if state.winner is not None:
+        return True
+
+    # Check if any player has 10 victory points
+    for player in state.players:
+        if player.victory_points >= 10:
+            state.winner = player.player_idx
+            return True
+
+    return False
     

@@ -150,6 +150,8 @@ class TrainingPipeline:
                 eval_start = time.time()
                 eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
                 eval_time = time.time() - eval_start
+                self._save_eval_results(eval_metrics, iteration + 1)
+                self.log(f"Evaluation completed in {eval_time:.2f}s")
 
 
             # self.log("Evaluating network...")
@@ -157,8 +159,8 @@ class TrainingPipeline:
             # eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
             # eval_time = time.time() - eval_start
             
-            self._save_eval_results(eval_metrics, iteration + 1)
-            self.log(f"Evaluation completed in {eval_time:.2f}s")
+            # self._save_eval_results(eval_metrics, iteration + 1)
+            # self.log(f"Evaluation completed in {eval_time:.2f}s")
             
             # Step 4: Update and save metrics
             self.update_metrics(iteration + 1, train_metrics, eval_metrics)

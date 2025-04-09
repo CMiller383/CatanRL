@@ -35,7 +35,9 @@ test_config = {
     'epochs': 1,
     'batch_size': 16,
     'buffer_size': 1000,
-    'max_moves': 50  # Limit moves for testing
+    'max_moves': 50,  # Limit moves for testing
+    'learning_rate': 0.001,
+    'model_dir': 'models'
 }
 
 print("=== AlphaZero Catan Component Tests ===")

@@ -75,15 +75,16 @@ class SelfPlayWorker:
         return all_game_data
     
     def _is_game_over(self, game_state):
-        """Check if a game is over"""
-        # Check if any player has 10+ victory points
-        for player in game_state.players:
-            if player.victory_points >= 10:
-                return True
-        return False
+        from game.game_state import check_game_over
+        """Check if the game is over"""
+        if game_state.winner is not None:
+            return True
+        return check_game_over(game_state)
     
     def _get_winner(self, game_state):
         """Get the winner's player index"""
+        if game_state.winner is not None:
+            return game_state.winner
         max_vp = -1
         winner = None
         

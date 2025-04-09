@@ -375,11 +375,10 @@ class MCTS:
             is_terminal: Whether the state is terminal
         """
         # Check if any player has 10 victory points
-        for player in game_state.players:
-            if player.victory_points >= 10:
-                return True
-        
-        return False
+        from game.game_state import check_game_over
+        if game_state.winner is not None:
+            return True
+        return check_game_over(game_state)
     
     def _get_game_outcome(self, game_state):
         """
@@ -392,6 +391,12 @@ class MCTS:
             outcome: The outcome from the current player's perspective
         """
         current_player = game_state.get_current_player()
+        if game_state.winner is not None:
+            if game_state.winner == current_player.player_idx:
+                return 1.0
+            else:
+                return -1.0
+            
         max_points = 0
         winner = None
         
