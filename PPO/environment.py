@@ -92,7 +92,7 @@ class CatanEnvironment:
         new_state = self._get_observation()
         reward = self._calculate_reward(valid_move)
         done = self._is_game_over()
-        info = {'victory_points': self._get_victory_points()}
+        info = {'victory_points': self._player.victory_points}
         
         self.episode_rewards += reward
         
@@ -138,7 +138,7 @@ class CatanEnvironment:
         obs.append(len(player.dev_cards))
         
         # Victory points
-        obs.append(player.get_victory_points())
+        obs.append(player.victory_points)
         
         # Game board state (simplified)
         # For each spot, is it owned by our player, another player, or empty
@@ -210,7 +210,7 @@ class CatanEnvironment:
         player = self.game.players[self.current_player_idx]
         
         # Main reward based on victory points
-        vp_reward = player.get_victory_points() * 0.5
+        vp_reward = player.victory_points * 0.5
         
         # Additional rewards for good game tactics
         resource_reward = sum(player.resources.values()) * 0.01
@@ -231,7 +231,7 @@ class CatanEnvironment:
     
     def _calculate_total_vp(self, player: Player) -> int:
         """Calculate total victory points including longest road and largest army"""
-        vp = player.get_victory_points()
+        vp = player.victory_points
         
         # Add longest road (2 points)
         if self.game.longest_road_player == player.player_id:

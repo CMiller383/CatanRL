@@ -268,7 +268,7 @@ class MCTS:
         """
         # Check if any player has 10 victory points
         for player in game_state.players:
-            if player.get_victory_points() >= 10:
+            if player.victory_points >= 10:
                 return True
         
         return False
@@ -289,7 +289,7 @@ class MCTS:
         
         # Find the player with the most victory points
         for player in game_state.players:
-            points = player.get_victory_points()
+            points = player.victory_points
             if points > max_points:
                 max_points = points
                 winner = player

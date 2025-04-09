@@ -88,8 +88,8 @@ class SelfPlayWorker:
             # Log game results
             winner = self._get_winner(game.state)
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].get_victory_points()} VP "
-                  f"(Our agent: {game.state.players[0].get_victory_points()} VP)")
+                  f"{game.state.players[winner].player.victory_points} VP "
+                  f"(Our agent: {game.state.players[0].player.victory_points} VP)")
         
         return all_game_data
     
@@ -97,7 +97,7 @@ class SelfPlayWorker:
         """Check if a game is over"""
         # Check if any player has 10+ victory points
         for player in game_state.players:
-            if player.get_victory_points() >= 10:
+            if player.victory_points >= 10:
                 return True
         return False
     
@@ -107,7 +107,7 @@ class SelfPlayWorker:
         winner = None
         
         for i, player in enumerate(game_state.players):
-            vp = player.get_victory_points()
+            vp = player.victory_points
             if vp > max_vp:
                 max_vp = vp
                 winner = i
@@ -316,7 +316,7 @@ class Evaluator:
             
             # Record results
             game_lengths.append(moves)
-            vp_total += game.state.players[0].get_victory_points()
+            vp_total += game.state.players[0].player.victory_points
             
             # Check if our agent won
             winner = self._get_winner(game.state)
@@ -324,8 +324,8 @@ class Evaluator:
                 wins += 1
             
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].get_victory_points()} VP "
-                  f"(Our agent: {game.state.players[0].get_victory_points()} VP)")
+                  f"{game.state.players[winner].player.victory_points} VP "
+                  f"(Our agent: {game.state.players[0].player.victory_points} VP)")
         
         # Calculate statistics
         win_rate = wins / num_games
@@ -349,7 +349,7 @@ class Evaluator:
     def _is_game_over(self, game_state):
         """Check if the game is over"""
         for player in game_state.players:
-            if player.get_victory_points() >= 10:
+            if player.victory_points >= 10:
                 return True
         return False
     
@@ -359,7 +359,7 @@ class Evaluator:
         winner = None
         
         for i, player in enumerate(game_state.players):
-            vp = player.get_victory_points()
+            vp = player.victory_points
             if vp > max_vp:
                 max_vp = vp
                 winner = i
