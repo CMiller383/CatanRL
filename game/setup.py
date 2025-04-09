@@ -26,10 +26,10 @@ def place_initial_settlement(state, spot_id):
     # If in second setup phase, give resources for adjacent hexes
     if state.current_phase == GamePhase.SETUP_PHASE_2:
         give_initial_resources(state, spot_id, player)
-        print(f"Giving resources to {player.name} for second settlement")
-        for resource, count in player.resources.items():
-            if count > 0:
-                print(f"  - {resource.name}: {count}")
+        # print(f"Giving resources to {player.name} for second settlement")
+        # for resource, count in player.resources.items():
+        #     if count > 0:
+        #         print(f"  - {resource.name}: {count}")
     
     return True
 

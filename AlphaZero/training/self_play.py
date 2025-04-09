@@ -30,18 +30,19 @@ class SelfPlayWorker:
         all_game_data = []
         
         for game_idx in tqdm(range(num_games), desc="Self-play games"):
-            # Create a new game and agent
+            # Create a new game
             game = self.game_creator()
-            agent = self.agent_creator(player_id=0)
-            agent.set_training_mode(False)
             
-            # Replace the first agent in the game
-            game.agents[0] = agent
+            # Create AlphaZero agents for all players
+            for player_idx in range(len(game.agents)):
+                agent = self.agent_creator(player_id=player_idx)
+                agent.set_training_mode(True)  # Enable training mode
+                game.agents[player_idx] = agent
             
             # Handle the setup phase
             while not game.is_setup_complete():
                 game.process_ai_turn()
-            print("Setup complete")
+                
             # Play the game
             move_count = 0
             max_moves = self.config.get('max_moves', 200)
@@ -49,36 +50,27 @@ class SelfPlayWorker:
             # Main game loop
             while not self._is_game_over(game.state) and move_count < max_moves:
                 move_count += 1
-                # print(f"Move {move_count}")
-                # If it's our agent's turn
                 game.process_ai_turn()
-                # if game.state.current_player_idx == 0:
-                #     # Get action from agent
-                #     action = agent.get_action(game.state)
-                #     game.do_action(action)
-                # else:
-                #     # Other players' turns
-                #     game.process_ai_turn()
-            #print agent types
-            #print game.agents[0].__class__.__name__)
-            #print game.agents[1].__class__.__name__)
-            #print game.agents[2].__class__.__name__)
-            #print game.agents[3].__class__.__name__)
-            # Game is over, calculate rewards
-            reward = self._calculate_reward(game.state, player_id=0)
             
-            # Record final reward in agent's game history
-            agent.record_game_result(reward)
+            # Calculate rewards for all agents
+            winner = self._get_winner(game.state)
             
-            # Get game data from agent
-            game_data = agent.get_game_history()
-            all_game_data.extend(game_data)
+            # Collect game data from all agents
+            for player_idx, agent in enumerate(game.agents):
+                # Calculate reward for this player
+                reward = self._calculate_reward(game.state, player_id=player_idx)
+                
+                # Record final reward in agent's game history
+                agent.record_game_result(reward)
+                
+                # Get and add game history data
+                game_data = agent.get_game_history()
+                all_game_data.extend(game_data)
             
             # Log game results
             winner = self._get_winner(game.state)
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].victory_points} VP "
-                  f"(Our agent: {game.state.players[0].victory_points} VP)")
+                f"{game.state.players[winner].victory_points} VP")
         
         return all_game_data
     

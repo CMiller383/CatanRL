@@ -21,12 +21,13 @@ class Evaluator:
     def evaluate(self, num_games=None):
         """
         Evaluate the agent
-        
+
         Args:
             num_games: Number of evaluation games
-            
+
         Returns:
-            results: Evaluation results
+            results: Evaluation results including win rate, average victory points,
+                    average game length, and total moves
         """
         if num_games is None:
             num_games = self.config.get('eval_games', 20)
@@ -56,7 +57,6 @@ class Evaluator:
             # Main game loop
             while not self._is_game_over(game.state) and moves < max_moves:
                 moves += 1
-                
                 if game.state.current_player_idx == 0:
                     # AlphaZero agent's turn
                     action = agent.get_action(game.state)
@@ -75,27 +75,31 @@ class Evaluator:
                 wins += 1
             
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].victory_points} VP "
-                  f"(Our agent: {game.state.players[0].victory_points} VP)")
+                f"{game.state.players[winner].victory_points} VP "
+                f"(Our agent: {game.state.players[0].victory_points} VP)")
         
         # Calculate statistics
         win_rate = wins / num_games
         avg_vp = vp_total / num_games
         avg_length = sum(game_lengths) / len(game_lengths) if game_lengths else 0
+        total_moves = sum(game_lengths)
         
         results = {
             'win_rate': win_rate,
             'avg_vp': avg_vp,
             'avg_game_length': avg_length,
+            'total_moves': total_moves,
             'num_games': num_games
         }
         
-        print(f"Evaluation results:")
+        print("Evaluation results:")
         print(f"  Win rate: {win_rate:.2f}")
         print(f"  Average VP: {avg_vp:.2f}")
         print(f"  Average game length: {avg_length:.2f} moves")
+        print(f"  Total moves: {total_moves}")
         
         return results
+
     
     def _is_game_over(self, game_state):
         """Check if the game is over"""

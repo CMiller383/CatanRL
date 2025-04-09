@@ -47,7 +47,7 @@ class GameState:
 
         self.winner = None
     
-    def get_current_player(self):
+    def get_current_player(self): ##please dont remove thiis i know its not necessary but i tried to get rid of it and it broke everything
         return self.players[self.current_player_idx]
     
     

@@ -6,7 +6,8 @@ Save this as train.py in your project root directory.
 import os
 import sys
 import argparse
-from AlphaZero.training.self_play import TrainingPipeline
+from AlphaZero.training.training_pipeline import TrainingPipeline
+from AlphaZero.utils.config import get_config
 
 def main():
     parser = argparse.ArgumentParser(description="AlphaZero Catan Training")
@@ -51,14 +52,12 @@ def main():
         args.sims = 150
         args.eval_games = 15
         print("Running in OVERNIGHT mode (extended training run)")
-    
+    config = get_config()
     # Set up configuration
-    config = {
-        'num_iterations': args.iterations,
-        'self_play_games': args.games, 
-        'num_simulations': args.sims,
-        'eval_games': args.eval_games
-    }
+    config['num_iterations'] = args.iterations
+    config['self_play_games'] = args.games
+    config['num_simulations'] = args.sims
+    config['eval_games'] = args.eval_games
     
     print(f"\n=== AlphaZero Catan Training ===")
     print(f"Iterations: {args.iterations}")

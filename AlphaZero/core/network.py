@@ -1,6 +1,3 @@
-"""
-Neural network architecture for AlphaZero Catan.
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

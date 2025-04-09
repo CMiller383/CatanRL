@@ -57,7 +57,7 @@ class StateEncoder:
         # Development cards (simplified)
         self.state_dim += 5 * 4  # 5 types for 4 players
         
-        print(f"Estimated state dimension: {self.state_dim}")
+        # print(f"Estimated state dimension: {self.state_dim}")
     
     def encode_state(self, game_state):
         """

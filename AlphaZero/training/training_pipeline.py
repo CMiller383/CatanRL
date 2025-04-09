@@ -16,25 +16,7 @@ class TrainingPipeline:
         Args:
             config: Configuration dictionary
         """
-        self.config = {
-            # Default configuration
-            'state_dim': 1000,
-            'action_dim': 200,
-            'hidden_dim': 256,
-            'learning_rate': 0.001,
-            'num_iterations': 50,
-            'self_play_games': 20,
-            'eval_games': 10,
-            'epochs': 10,
-            'batch_size': 128,
-            'buffer_size': 100000,
-            'max_moves': 200,
-            'model_dir': 'models',
-        }
         
-        # Update with provided config
-        if config:
-            self.config.update(config)
         self.training_metrics = {
             'iteration': [],
             'policy_loss': [],
@@ -42,9 +24,14 @@ class TrainingPipeline:
             'total_loss': [],
             'win_rate': [],
             'avg_vp': [],
-            'avg_game_length': []
+            'avg_game_length': [],
+            'total_moves': []
         }
-
+        if config is None:
+            from AlphaZero.utils.config import get_config
+            self.config = get_config()
+        else:
+            self.config = config
         # Current iteration
         self.current_iteration = 0
 
@@ -143,31 +130,35 @@ class TrainingPipeline:
             # Step 2: Train network
             self.log("Training network...")
             train_start = time.time()
-            losses = self.trainer.train(
+            loss_metrics = self.trainer.train(
                 epochs=self.config['epochs'],
                 batch_size=self.config['batch_size']
             )
             train_time = time.time() - train_start
-            
-            # Extract training metrics
-            avg_loss = sum(losses) / len(losses) if losses else 0
+
+            # Extract training metrics directly from the returned dictionary
             train_metrics = {
-                'total_loss': avg_loss,
-                'value_loss': 0,  # Need to modify trainer.train to return these
-                'policy_loss': 0,
+                'total_loss': loss_metrics.get('total_loss', 0),
+                'value_loss': loss_metrics.get('value_loss', 0),
+                'policy_loss': loss_metrics.get('policy_loss', 0),
             }
             
-            # Step 3: Evaluate (more frequently now)
             eval_metrics = {'win_rate': 0, 'avg_vp': 0, 'avg_game_length': 0}
-            if (iteration + 1) % 2 == 0:  # Evaluate every 2 iterations
+            #update to every 2 or so iterations leave comment so I can change for testing
+            if (iteration + 1) % 2 == 0:
                 self.log("Evaluating network...")
                 eval_start = time.time()
                 eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
                 eval_time = time.time() - eval_start
-                
-                # Save evaluation results
-                self._save_eval_results(eval_metrics, iteration + 1)
-                self.log(f"Evaluation completed in {eval_time:.2f}s")
+
+
+            # self.log("Evaluating network...")
+            # eval_start = time.time()
+            # eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
+            # eval_time = time.time() - eval_start
+            
+            self._save_eval_results(eval_metrics, iteration + 1)
+            self.log(f"Evaluation completed in {eval_time:.2f}s")
             
             # Step 4: Update and save metrics
             self.update_metrics(iteration + 1, train_metrics, eval_metrics)
@@ -176,7 +167,7 @@ class TrainingPipeline:
             
             # Step 5: Save model
             is_best = False
-            if eval_metrics['win_rate'] >= 0.55:  # If win rate is good
+            if eval_metrics['win_rate'] >= 0.75:  # If win rate is good
                 is_best = True
                 self.log(f"New best model with win rate {eval_metrics['win_rate']:.2f}!")
             
@@ -263,7 +254,7 @@ class TrainingPipeline:
             return False
     def plot_metrics(self):
         """
-        Plot training metrics using Plotly (no matplotlib dependency)
+        Plot training metrics using Plotly.
         """
         if not self.training_metrics['iteration']:
             self.log("No metrics to plot yet")
@@ -277,15 +268,20 @@ class TrainingPipeline:
             # Create plots directory
             os.makedirs('plots', exist_ok=True)
             
-            # Create a subplot with 3 rows
+            # Create a subplot with 3 rows:
+            # 1 - Training Losses, 2 - Performance Metrics, 3 - Game Length Metrics
             fig = make_subplots(
                 rows=3, 
                 cols=1,
-                subplot_titles=('AlphaZero Training Losses', 'Performance Metrics', 'Game Length'),
+                subplot_titles=(
+                    'AlphaZero Training Losses', 
+                    'Performance Metrics', 
+                    'Game Length Metrics'
+                ),
                 vertical_spacing=0.1
             )
             
-            # Add loss traces to first subplot
+            # Subplot 1: Training Losses
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
@@ -295,7 +291,6 @@ class TrainingPipeline:
                 ),
                 row=1, col=1
             )
-            
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
@@ -305,7 +300,6 @@ class TrainingPipeline:
                 ),
                 row=1, col=1
             )
-            
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
@@ -316,7 +310,7 @@ class TrainingPipeline:
                 row=1, col=1
             )
             
-            # Add performance metrics to second subplot
+            # Subplot 2: Performance Metrics
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
@@ -326,7 +320,6 @@ class TrainingPipeline:
                 ),
                 row=2, col=1
             )
-            
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
@@ -337,16 +330,25 @@ class TrainingPipeline:
                 row=2, col=1
             )
             
-            # Add game length to third subplot
+            # Subplot 3: Game Length Metrics
             fig.add_trace(
                 go.Scatter(
                     x=self.training_metrics['iteration'], 
                     y=self.training_metrics['avg_game_length'],
                     mode='lines+markers',
-                    name='Game Length'
+                    name='Avg Game Length (moves)'
                 ),
                 row=3, col=1
             )
+            # fig.add_trace(
+            #     go.Scatter(
+            #         x=self.training_metrics['iteration'], 
+            #         y=self.training_metrics['total_moves'],
+            #         mode='lines+markers',
+            #         name='Total Moves'
+            #     ),
+            #     row=3, col=1
+            # )
             
             # Update layout
             fig.update_layout(
@@ -363,11 +365,11 @@ class TrainingPipeline:
             fig.update_yaxes(title_text="Moves", row=3, col=1)
             
             # Save as HTML file
-            fig.write_html(f"plots/training_metrics.html")
+            fig.write_html("plots/training_metrics.html")
             
-            # Also save as image
+            # Also try saving as an image, if possible (requires kaleido)
             try:
-                fig.write_image(f"plots/training_metrics.png")
+                fig.write_image("plots/training_metrics.png")
             except Exception as e:
                 self.log(f"Could not save image (requires kaleido): {e}")
             
@@ -376,6 +378,7 @@ class TrainingPipeline:
         except ImportError as e:
             self.log(f"Could not import Plotly for visualization. Error: {e}")
             self.log("Run 'pip install plotly' to enable visualization.")
+
     def _save_eval_results(self, results, iteration):
         """Save evaluation results to a file"""
         import json
@@ -390,12 +393,11 @@ class TrainingPipeline:
         self.log_file.flush()
 
     def update_metrics(self, iteration, train_metrics, eval_metrics):
-        """Update and track training metrics"""
-        # Store metrics for plotting
         self.training_metrics['iteration'].append(iteration)
-        self.training_metrics['policy_loss'].append(train_metrics.get('policy_loss', 0))
-        self.training_metrics['value_loss'].append(train_metrics.get('value_loss', 0))
-        self.training_metrics['total_loss'].append(train_metrics.get('total_loss', 0))
-        self.training_metrics['win_rate'].append(eval_metrics.get('win_rate', 0))
-        self.training_metrics['avg_vp'].append(eval_metrics.get('avg_vp', 0))
-        self.training_metrics['avg_game_length'].append(eval_metrics.get('avg_game_length', 0))
+        self.training_metrics['total_loss'].append(train_metrics['total_loss'])
+        self.training_metrics['policy_loss'].append(train_metrics['policy_loss'])
+        self.training_metrics['value_loss'].append(train_metrics['value_loss'])
+        self.training_metrics['win_rate'].append(eval_metrics['win_rate'])
+        self.training_metrics['avg_vp'].append(eval_metrics['avg_vp'])
+        self.training_metrics['avg_game_length'].append(eval_metrics['avg_game_length'])
+        self.training_metrics['total_moves'].append(eval_metrics.get('total_moves', 0))
