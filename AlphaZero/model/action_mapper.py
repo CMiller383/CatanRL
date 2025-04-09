@@ -3,7 +3,7 @@ Maps between game actions and neural network action indices.
 """
 import numpy as np
 from game.action import Action
-from game.enums import ActionType
+from game.enums import ActionType, Resource
 
 class ActionMapper:
     """
@@ -19,6 +19,19 @@ class ActionMapper:
         """
         self.max_actions = max_actions
         self.action_space = self._build_action_space()
+        
+        # Create a mapping for resource enum values to indices
+        self.resource_to_index = {
+            Resource.WOOD: 0,
+            Resource.BRICK: 1,
+            Resource.SHEEP: 2,
+            Resource.WHEAT: 3,
+            Resource.ORE: 4,
+            Resource.DESERT: 5
+        }
+        
+        # Create reverse mapping
+        self.index_to_resource = {v: k for k, v in self.resource_to_index.items()}
     
     def _build_action_space(self):
         """
@@ -68,12 +81,8 @@ class ActionMapper:
         Returns:
             index: Integer index representing the action
         """
-        # print(f"\n--- Action to Index Debug ---")
-        # print(f"Action Type: {action.type}")
-        # print(f"Action Payload: {action.payload}")
-        # print(f"Payload Type: {type(action.payload)}")
-        # Handle simple actions without payloads
         try:
+            # Handle simple actions without payloads
             if action.type in [ActionType.ROLL_DICE, ActionType.END_TURN, 
                             ActionType.BUY_DEV_CARD, ActionType.PLAY_KNIGHT_CARD,
                             ActionType.PLAY_ROAD_BUILDING_CARD, ActionType.PLAY_YEAR_OF_PLENTY_CARD,
@@ -84,47 +93,57 @@ class ActionMapper:
             elif action.type == ActionType.BUILD_SETTLEMENT:
                 start, _ = self.action_space["build_settlement"]
                 # Map spot_id to index range, with bounds checking
-                offset = min(action.payload, 54) - 1  # Assuming spot_ids start at 1
+                offset = min(int(action.payload), 54) - 1  # Assuming spot_ids start at 1
                 return start + offset
             
             elif action.type == ActionType.UPGRADE_TO_CITY:
                 start, _ = self.action_space["upgrade_city"]
-                offset = min(action.payload, 54) - 1
+                offset = min(int(action.payload), 54) - 1
                 return start + offset
             
             # Handle road actions (with road_id payload)
             elif action.type == ActionType.BUILD_ROAD:
                 start, _ = self.action_space["build_road"]
-                offset = min(action.payload, 72) - 1  # Assuming road_ids start at 1
+                offset = min(int(action.payload), 72) - 1  # Assuming road_ids start at 1
                 return start + offset
             
             elif action.type == ActionType.PLACE_FREE_ROAD:
                 start, _ = self.action_space["place_free_road"]
-                offset = min(action.payload, 72) - 1
+                offset = min(int(action.payload), 72) - 1
                 return start + offset
             
             # Handle robber movement (with hex_id payload)
             elif action.type == ActionType.MOVE_ROBBER:
                 start, _ = self.action_space["move_robber"]
-                offset = min(action.payload, 19) - 1  # Assuming hex_ids start at 1
+                offset = min(int(action.payload), 19) - 1  # Assuming hex_ids start at 1
                 return start + offset
             
             # Handle resource selection
             elif action.type in [ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, ActionType.SELECT_MONOPOLY_RESOURCE]:
                 start, _ = self.action_space["select_resource"]
-                # Map resource enum to index, ensuring bounds
-                resource_idx = min(action.payload.value, 5) if hasattr(action.payload, 'value') else 0
-                return start + resource_idx
+                # Map resource enum to index using our mapping
+                if action.payload in self.resource_to_index:
+                    resource_idx = self.resource_to_index[action.payload]
+                    # Ensure we only use indices 0-4 (skip desert)
+                    if resource_idx < 5:  # Only 5 regular resources
+                        return start + resource_idx
+                    else:
+                        # Desert isn't a valid resource to select
+                        return start
+                return start  # Default to first resource if mapping fails
             
             # Handle stealing (with player_id payload)
             elif action.type == ActionType.STEAL:
                 start, _ = self.action_space["steal_resource"]
-                offset = min(action.payload, 4)  # Player index 0-3
+                offset = min(int(action.payload), 4)  # Player index 0-3
                 return start + offset
+            
+            # Fallback for unrecognized actions
+            return self.max_actions - 1  # Last index as fallback
+        
         except Exception as e:
             print(f"Error in action_to_index: {e} with action {action} and payload {action.payload}")
-        # Fallback for unrecognized actions
-        return self.max_actions - 1  # Last index as fallback
+            return self.max_actions - 1  # Last index as fallback
     
     def index_to_action(self, index, game_state=None):
         """
@@ -182,9 +201,7 @@ class ActionMapper:
         elif self.action_space["select_resource"][0] <= index <= self.action_space["select_resource"][1]:
             resource_idx = index - self.action_space["select_resource"][0]
             # Map index to Resource enum
-            from game.enums import Resource
-            resources = [Resource.WOOD, Resource.BRICK, Resource.SHEEP, Resource.WHEAT, Resource.ORE]
-            resource = resources[min(resource_idx, len(resources)-1)]
+            resource = self.index_to_resource[resource_idx]
             
             # Check game state to decide which resource selection action to use
             if game_state and game_state.awaiting_monopoly_selection:

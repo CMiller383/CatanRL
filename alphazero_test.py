@@ -263,12 +263,7 @@ try:
     def generate_one_game(n):
         return original_generate_games(1)
 
-    def train_one_epoch():
-        return original_train(epochs=1, batch_size=test_config['batch_size'])
-
-    # Override with our new methods
     pipeline.self_play_worker.generate_games = generate_one_game
-    pipeline.trainer.train = train_one_epoch
 
     # Now run one iteration
     pipeline.train(1)

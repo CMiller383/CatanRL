@@ -6,6 +6,7 @@ import numpy as np
 import copy
 import random
 from collections import defaultdict
+import time
 
 class MCTSNode:
     """
@@ -31,6 +32,9 @@ class MCTSNode:
         self.value_sum = 0.0
         self.is_expanded = False
         
+        # Debug info
+        self.ucb_scores = {}  # Stores UCB scores for child selection debugging
+    
     def value(self):
         """Get the current value estimate for this node"""
         if self.visit_count == 0:
@@ -48,10 +52,13 @@ class MCTSNode:
             action: The selected action
             child: The selected child node
         """
-        # UCB forrmula Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a)) https://www.turing.com/kb/guide-on-upper-confidence-bound-algorithm-in-reinforced-learning
+        # UCB formula: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
         best_score = float('-inf')
         best_action = None
         best_child = None
+        
+        # Clear previous UCB scores
+        self.ucb_scores = {}
         
         for action, child in self.children.items():
             # Exploitation term
@@ -62,6 +69,15 @@ class MCTSNode:
             
             # Combined score
             score = q_value + u_value
+            
+            # Store for debugging
+            self.ucb_scores[action] = {
+                'q_value': q_value,
+                'u_value': u_value,
+                'ucb_score': score,
+                'visit_count': child.visit_count,
+                'prior': child.prior
+            }
             
             if score > best_score:
                 best_score = score
@@ -78,6 +94,7 @@ class MCTSNode:
             action_priors: List of (action, prior) tuples
         """
         self.is_expanded = True
+        expansion_count = 0
         
         for action, prior in action_priors:
             if action not in self.children:
@@ -85,16 +102,22 @@ class MCTSNode:
                 next_state = copy.deepcopy(self.game_state)
                 
                 # Apply the action to get the next state
-                success = self._apply_action(next_state, action)
-                
-                if success:
-                    # Create a new child node
-                    self.children[action] = MCTSNode(
-                        game_state=next_state,
-                        parent=self,
-                        prior=prior,
-                        action=action
-                    )
+                try:
+                    success = self._apply_action(next_state, action)
+                    
+                    if success:
+                        # Create a new child node
+                        self.children[action] = MCTSNode(
+                            game_state=next_state,
+                            parent=self,
+                            prior=prior,
+                            action=action
+                        )
+                        expansion_count += 1
+                except Exception as e:
+                    print(f"Error in node expansion: {e} for action {action}")
+        
+        return expansion_count
     
     def _apply_action(self, state, action):
         """
@@ -107,14 +130,19 @@ class MCTSNode:
         Returns:
             success: Whether the action was applied successfully
         """
+        # Check if the action is in the possible actions for this state
+        if action not in state.possible_actions:
+            return False
+            
+        # Apply the action directly
         from game.game_logic import GameLogic
         
         # Create a temporary game logic object to handle the action
-        game_logic = GameLogic(state.board)
-        game_logic.state = state
+        temp_game = GameLogic(state.board)
+        temp_game.state = state
         
         # Apply the action
-        return game_logic.do_action(action)
+        return temp_game.do_action(action)
     
     def update(self, value):
         """
@@ -147,6 +175,9 @@ class MCTS:
         self.action_mapper = action_mapper
         self.num_simulations = num_simulations
         self.c_puct = c_puct
+        
+        # Debug flag
+        self.debug = False
     
     def search(self, game_state):
         """
@@ -160,11 +191,63 @@ class MCTS:
             value: Value estimate of the root state
         """
         # Create the root node
+        start_time = time.time()
         root = MCTSNode(game_state=copy.deepcopy(game_state))
         
+        # First, evaluate the root state
+        state_tensor = self.state_encoder.encode_state(game_state)
+        valid_action_mask = self.state_encoder.get_valid_action_mask(game_state)
+        
+        import torch
+        state_tensor = torch.FloatTensor(state_tensor).unsqueeze(0)  # Add batch dimension
+        
+        try:
+            # Get policy and value from the network
+            with torch.no_grad():
+                policy, value = self.network(state_tensor)
+                
+            # Convert to numpy for processing
+            policy = policy[0].numpy()  # Remove batch dimension
+            
+            # Create action priors for valid actions
+            action_priors = []
+            for i, valid in enumerate(valid_action_mask):
+                if valid:
+                    # Convert index back to action
+                    action = self.action_mapper.index_to_action(i, game_state)
+                    # Check if the action is valid in the current state
+                    if action in game_state.possible_actions:
+                        action_priors.append((action, policy[i]))
+            
+            # Expand the root node with these action priors
+            expansion_count = root.expand(action_priors)
+            
+            if self.debug:
+                print(f"Root node expanded with {expansion_count} children")
+                print(f"Root state value estimate: {value.item():.4f}")
+        
+        except Exception as e:
+            if self.debug:
+                print(f"Error in root node evaluation: {e}")
+                import traceback
+                traceback.print_exc()
+            # Return an empty policy if root evaluation fails
+            return {}, 0.0
+        
         # Run simulations
+        simulation_count = 0
         for _ in range(self.num_simulations):
-            self._simulate(root)
+            try:
+                success = self._simulate(root)
+                if success:
+                    simulation_count += 1
+            except Exception as e:
+                if self.debug:
+                    print(f"Error in simulation: {e}")
+        
+        if self.debug:
+            print(f"Completed {simulation_count} successful simulations out of {self.num_simulations} attempts")
+            print(f"MCTS search took {time.time() - start_time:.2f} seconds")
         
         # Calculate action probabilities based on visit counts
         action_probs = self._get_action_probs(root)
@@ -178,6 +261,9 @@ class MCTS:
         
         Args:
             root: The root node to start simulation from
+            
+        Returns:
+            success: Whether the simulation was successful
         """
         # Selection phase: traverse the tree to a leaf node
         node = root
@@ -185,39 +271,58 @@ class MCTS:
         
         while node.is_expanded and node.children:
             action, node = node.select_child(self.c_puct)
+            if node is None:
+                if self.debug:
+                    print("Warning: select_child returned None")
+                return False
             search_path.append(node)
         
-        # Check if we've reached a terminal state
-        if self._is_terminal(node.game_state):
-            # Use the game outcome as the value
-            value = self._get_game_outcome(node.game_state)
-        else:
-            # Expansion phase
+        # Expansion and evaluation phase
+        # Only expand nodes that are not terminal
+        if not self._is_terminal(node.game_state):
             # Encode the state for the neural network
             state_tensor = self.state_encoder.encode_state(node.game_state)
             valid_action_mask = self.state_encoder.get_valid_action_mask(node.game_state)
             
             # Get policy and value from the network
             import torch
-            state_tensor = torch.FloatTensor(state_tensor)
-            policy, value = self.network.predict(state_tensor, valid_action_mask)
+            state_tensor = torch.FloatTensor(state_tensor).unsqueeze(0)
             
-            # Convert to numpy for processing
-            policy = policy.detach().numpy()
+            try:
+                with torch.no_grad():
+                    policy, value = self.network(state_tensor)
+                
+                # Convert to numpy for processing
+                policy = policy[0].numpy()
+                value = value.item()
+                
+                # Create action priors for valid actions
+                action_priors = []
+                for i, valid in enumerate(valid_action_mask):
+                    if valid:
+                        # Convert index back to action
+                        action = self.action_mapper.index_to_action(i, node.game_state)
+                        # Only include actions that are valid in the current state
+                        if action in node.game_state.possible_actions:
+                            action_priors.append((action, policy[i]))
+                
+                # Expand the node with these action priors
+                expansion_count = node.expand(action_priors)
+                if self.debug and expansion_count == 0:
+                    print(f"Warning: Node expanded with 0 children")
             
-            # Create action priors for valid actions
-            action_priors = []
-            for i, valid in enumerate(valid_action_mask):
-                if valid:
-                    # Convert index back to action
-                    action = self.action_mapper.index_to_action(i, node.game_state)
-                    action_priors.append((action, policy[i]))
+            except Exception as e:
+                if self.debug:
+                    print(f"Error in node evaluation: {e}")
+                return False
             
-            # Expand the node with these action priors
-            node.expand(action_priors)
+        else:
+            # Terminal node
+            value = self._get_game_outcome(node.game_state)
         
         # Backpropagation phase
         self._backpropagate(search_path, value)
+        return True
     
     def _backpropagate(self, search_path, value):
         """
@@ -230,7 +335,7 @@ class MCTS:
         # For multi-player Catan, we need to adjust the value for each player's perspective
         for node in reversed(search_path):
             node.update(value)
-            # Negate the value for opposing players in a two-player zero-sum perspective
+            # Negate the value for opposing players in a zero-sum perspective
             # For Catan, this might need adjustment for multiple players
             value = -value
     
@@ -253,6 +358,9 @@ class MCTS:
             # Calculate probabilities based on visit counts
             for action, child in root.children.items():
                 action_probs[action] = child.visit_count / total_visits
+                
+                if self.debug and child.visit_count > 0:
+                    print(f"Action {action} - Visits: {child.visit_count}, Value: {child.value():.4f}, Prob: {action_probs[action]:.4f}")
         
         return action_probs
     
