@@ -3,7 +3,7 @@ from gui.catan_game import CatanGame
 
 def main():
     agent_types = [AgentType.RANDOM] * 4
-    agent_types[0] = AgentType.HUMAN
+    agent_types[0] = AgentType.ALPHAZERO
 
     # Start the game with selected setup
     game = CatanGame(

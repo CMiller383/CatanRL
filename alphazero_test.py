@@ -187,7 +187,7 @@ except Exception as e:
 # Test 7: Self-Play Single Game
 print("\n--- Test 7: Self-Play Single Game ---")
 try:
-    from AlphaZero.core.training import SelfPlayWorker
+    from AlphaZero.training.self_play import SelfPlayWorker
     
     # Create game factory
     def create_game():
@@ -219,7 +219,7 @@ except Exception as e:
 # Test 8: Minimal Training
 print("\n--- Test 8: Minimal Training ---")
 try:
-    from AlphaZero.core.training import NetworkTrainer
+    from AlphaZero.training.network_trainer import NetworkTrainer
     
     # Create optimizer
     optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
@@ -246,7 +246,8 @@ except Exception as e:
 # Test 9: Full Pipeline (Mini)
 print("\n--- Test 9: Mini Pipeline ---")
 try:
-    from AlphaZero.core.training import TrainingPipeline
+    from AlphaZero.training.training_pipeline import TrainingPipeline
+
     
     # Create mini pipeline
     mini_config = test_config.copy()

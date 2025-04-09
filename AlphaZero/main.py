@@ -7,7 +7,7 @@ import argparse
 import json
 import random
 import numpy as np
-from AlphaZero.core.training import TrainingPipeline
+from AlphaZero.training.self_play import TrainingPipeline
 from AlphaZero.core.network import CatanNetwork, DeepCatanNetwork
 
 def set_random_seeds(seed=42):

@@ -36,7 +36,7 @@ class AlphaZeroAgent(Agent):
         self.game_history = []
         
         # Debug flag
-        self.debug = True
+        self.debug = False
         self.inactivity_count = 0
     
     def set_training_mode(self, training_mode=True):
@@ -132,7 +132,7 @@ class AlphaZeroAgent(Agent):
         if not state.possible_actions:
             if self.debug:
                 print("Warning: No possible actions available!")
-            return None
+            return Action(ActionType.END_TURN)  # End turn if no actions
         
         if self.debug:
             print(f"\nCurrent player: {state.current_player_idx} (AlphaZero is player 0)")
