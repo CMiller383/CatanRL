@@ -322,7 +322,7 @@ def steal_resource_from_player(state, victim_idx):
         victim.resources[stolen_resource] -= 1
         current_player.add_resource(stolen_resource, 1)
         
-        print(f"Player {current_player.player_idx} stole {stolen_resource.name} from Player {victim_idx}")
+        # print(f"Player {current_player.player_idx} stole {stolen_resource.name} from Player {victim_idx}")
         
     state.awaiting_steal_selection = False
     return True

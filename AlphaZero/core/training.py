@@ -88,8 +88,8 @@ class SelfPlayWorker:
             # Log game results
             winner = self._get_winner(game.state)
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].player.victory_points} VP "
-                  f"(Our agent: {game.state.players[0].player.victory_points} VP)")
+                  f"{game.state.players[winner].victory_points} VP "
+                  f"(Our agent: {game.state.players[0].victory_points} VP)")
         
         return all_game_data
     
@@ -316,7 +316,7 @@ class Evaluator:
             
             # Record results
             game_lengths.append(moves)
-            vp_total += game.state.players[0].player.victory_points
+            vp_total += game.state.players[0].victory_points
             
             # Check if our agent won
             winner = self._get_winner(game.state)
@@ -324,8 +324,8 @@ class Evaluator:
                 wins += 1
             
             print(f"Game {game_idx+1}: Player {winner} won with "
-                  f"{game.state.players[winner].player.victory_points} VP "
-                  f"(Our agent: {game.state.players[0].player.victory_points} VP)")
+                  f"{game.state.players[winner].victory_points} VP "
+                  f"(Our agent: {game.state.players[0].victory_points} VP)")
         
         # Calculate statistics
         win_rate = wins / num_games

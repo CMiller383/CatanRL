@@ -113,6 +113,7 @@ class AlphaZeroAgent(Agent):
         """
         # If no valid actions, return None
         if not state.possible_actions:
+            print("AlphaZero: No possible actions")
             return None
         
         # If only one valid action, take it (common for must-move situations)
@@ -136,6 +137,7 @@ class AlphaZeroAgent(Agent):
         # Select the action based on the policy
         if self.training_mode and random.random() < 0.1:
             # Occasionally explore random actions during training
+            print("Exploring random action")
             return random.choice(list(state.possible_actions))
         else:
             # Choose the action with the highest probability
@@ -145,7 +147,7 @@ class AlphaZeroAgent(Agent):
                 return action
             else:
                 # Fallback to random action if MCTS failed
-                # print(f"MTCS failed, choosing random action")
+                print(f"MTCS failed, choosing random action")
                 return random.choice(list(state.possible_actions))
     
     def record_game_result(self, final_reward):

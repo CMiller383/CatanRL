@@ -73,54 +73,56 @@ class ActionMapper:
         # print(f"Action Payload: {action.payload}")
         # print(f"Payload Type: {type(action.payload)}")
         # Handle simple actions without payloads
-        if action.type in [ActionType.ROLL_DICE, ActionType.END_TURN, 
-                          ActionType.BUY_DEV_CARD, ActionType.PLAY_KNIGHT_CARD,
-                          ActionType.PLAY_ROAD_BUILDING_CARD, ActionType.PLAY_YEAR_OF_PLENTY_CARD,
-                          ActionType.PLAY_MONOPOLY_CARD]:
-            return self.action_space[action.type]
-        
-        # Handle settlement and city actions (with spot_id payload)
-        elif action.type == ActionType.BUILD_SETTLEMENT:
-            start, _ = self.action_space["build_settlement"]
-            # Map spot_id to index range, with bounds checking
-            offset = min(action.payload, 54) - 1  # Assuming spot_ids start at 1
-            return start + offset
-        
-        elif action.type == ActionType.UPGRADE_TO_CITY:
-            start, _ = self.action_space["upgrade_city"]
-            offset = min(action.payload, 54) - 1
-            return start + offset
-        
-        # Handle road actions (with road_id payload)
-        elif action.type == ActionType.BUILD_ROAD:
-            start, _ = self.action_space["build_road"]
-            offset = min(action.payload, 72) - 1  # Assuming road_ids start at 1
-            return start + offset
-        
-        elif action.type == ActionType.PLACE_FREE_ROAD:
-            start, _ = self.action_space["place_free_road"]
-            offset = min(action.payload, 72) - 1
-            return start + offset
-        
-        # Handle robber movement (with hex_id payload)
-        elif action.type == ActionType.MOVE_ROBBER:
-            start, _ = self.action_space["move_robber"]
-            offset = min(action.payload, 19) - 1  # Assuming hex_ids start at 1
-            return start + offset
-        
-        # Handle resource selection
-        elif action.type in [ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, ActionType.SELECT_MONOPOLY_RESOURCE]:
-            start, _ = self.action_space["select_resource"]
-            # Map resource enum to index, ensuring bounds
-            resource_idx = min(action.payload.value, 5) if hasattr(action.payload, 'value') else 0
-            return start + resource_idx
-        
-        # Handle stealing (with player_id payload)
-        elif action.type == ActionType.STEAL:
-            start, _ = self.action_space["steal_resource"]
-            offset = min(action.payload, 4)  # Player index 0-3
-            return start + offset
-        
+        try:
+            if action.type in [ActionType.ROLL_DICE, ActionType.END_TURN, 
+                            ActionType.BUY_DEV_CARD, ActionType.PLAY_KNIGHT_CARD,
+                            ActionType.PLAY_ROAD_BUILDING_CARD, ActionType.PLAY_YEAR_OF_PLENTY_CARD,
+                            ActionType.PLAY_MONOPOLY_CARD]:
+                return self.action_space[action.type]
+            
+            # Handle settlement and city actions (with spot_id payload)
+            elif action.type == ActionType.BUILD_SETTLEMENT:
+                start, _ = self.action_space["build_settlement"]
+                # Map spot_id to index range, with bounds checking
+                offset = min(action.payload, 54) - 1  # Assuming spot_ids start at 1
+                return start + offset
+            
+            elif action.type == ActionType.UPGRADE_TO_CITY:
+                start, _ = self.action_space["upgrade_city"]
+                offset = min(action.payload, 54) - 1
+                return start + offset
+            
+            # Handle road actions (with road_id payload)
+            elif action.type == ActionType.BUILD_ROAD:
+                start, _ = self.action_space["build_road"]
+                offset = min(action.payload, 72) - 1  # Assuming road_ids start at 1
+                return start + offset
+            
+            elif action.type == ActionType.PLACE_FREE_ROAD:
+                start, _ = self.action_space["place_free_road"]
+                offset = min(action.payload, 72) - 1
+                return start + offset
+            
+            # Handle robber movement (with hex_id payload)
+            elif action.type == ActionType.MOVE_ROBBER:
+                start, _ = self.action_space["move_robber"]
+                offset = min(action.payload, 19) - 1  # Assuming hex_ids start at 1
+                return start + offset
+            
+            # Handle resource selection
+            elif action.type in [ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, ActionType.SELECT_MONOPOLY_RESOURCE]:
+                start, _ = self.action_space["select_resource"]
+                # Map resource enum to index, ensuring bounds
+                resource_idx = min(action.payload.value, 5) if hasattr(action.payload, 'value') else 0
+                return start + resource_idx
+            
+            # Handle stealing (with player_id payload)
+            elif action.type == ActionType.STEAL:
+                start, _ = self.action_space["steal_resource"]
+                offset = min(action.payload, 4)  # Player index 0-3
+                return start + offset
+        except Exception as e:
+            print(f"Error in action_to_index: {e} with action {action} and payload {action.payload}")
         # Fallback for unrecognized actions
         return self.max_actions - 1  # Last index as fallback
     
