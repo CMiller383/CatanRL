@@ -5,7 +5,7 @@ import pygame
 from gui.constants import BACKGROUND_COLOR, SCREEN_PROPORTION
 from gui.renderer import Renderer
 from gui.input_handler import InputHandler
-from gui.ui_components import DevCardHandler, ResourceSelectionHandler, StealSelectionHandler
+from gui.ui_components import ResourceSelectionHandler, StealSelectionHandler
 from game.board import Board
 from game.game_logic import GameLogic
 
@@ -49,17 +49,7 @@ class CatanGame:
         
         # Initialize renderer
         self.renderer = Renderer(self.screen, window_width, window_height, self.board, self.game_logic)
-        
-        # Initialize UI components
-        self.dev_card_handler = DevCardHandler(
-            self.game_logic, 
-            self.screen, 
-            window_width, 
-            window_height, 
-            fonts,
-            self.renderer.dev_card_icons
-        )
-        
+                
         self.resource_selection_handler = ResourceSelectionHandler(
             self.game_logic,
             self.screen,
@@ -82,7 +72,6 @@ class CatanGame:
             self.game_logic, 
             self.renderer,
             {
-                'devcards': self.dev_card_handler,
                 'resource': self.resource_selection_handler,
                 'steal': self.steal_selection_handler
             }
@@ -131,14 +120,14 @@ class CatanGame:
             self.renderer.draw_dice()
             self.renderer.draw_end_turn_button()
             self.renderer.draw_robber_placement(self.input_handler.robber_placement_active)
+            self.renderer.draw_dev_card_menu()  # Draw dev card menu
             
             # Draw UI components
-            self.dev_card_handler.draw_development_cards()
             self.resource_selection_handler.draw_resource_selection()
             self.steal_selection_handler.draw_steal_selection()
             
             # Update the display
             pygame.display.flip()
-            self.clock.tick(500)
+            self.clock.tick(60)
         
         pygame.quit()

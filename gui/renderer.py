@@ -3,11 +3,11 @@ Renderer for the Catan game GUI.
 """
 import os
 import pygame
+from game.action import Action
 from game.rules import is_valid_initial_road
 from gui.constants import *
-from game.enums import GamePhase, SettlementType
+from game.enums import ActionType, SettlementType
 from game.development_card import DevCardType
-
 
 class Renderer:
     def __init__(self, screen, window_width, window_height, board, game_logic):
@@ -57,14 +57,14 @@ class Renderer:
         self.city_images = {}
         self.dice_images = {}
         self.border_image = None
-        self.diceroll_image = None
         self.dev_card_icons = {}
         self.load_images()
 
     def compute_transform(self, margin=0.1):
-        """Compute scale and offset to fit the board in the window"""
-        # Account for player panel width (20% of screen)
+        """Compute scale and offset to fit the board in the window, leaving space for UI elements"""
+        # Account for player panel width (20% of screen) and dev card menu (12% of height)
         effective_width = self.window_width * 0.8
+        effective_height = self.window_height * 0.88  # Reserve bottom 12% for dev card menu
         
         # Get min and max coordinates of the board
         positions = [spot.position for spot in self.board.spots.values()]
@@ -78,12 +78,13 @@ class Renderer:
         
         # Calculate scale to fit in window with margin
         scale_x = (effective_width * (1 - margin)) / board_width
-        scale_y = (self.window_height * (1 - margin)) / board_height
+        scale_y = (effective_height * (1 - margin)) / board_height
         scale = min(scale_x, scale_y)
         
-        # Calculate offset to center the board
+        # Calculate offset to center the board within the effective area
         offset_x = (effective_width - board_width * scale) / 2 - min_x * scale
-        offset_y = (self.window_height - board_height * scale) / 2 - min_y * scale
+        # Shift the board upward to make space for dev card menu
+        offset_y = (effective_height - board_height * scale) / 2 - min_y * scale
         
         return scale, (offset_x, offset_y)
     
@@ -158,7 +159,7 @@ class Renderer:
 
         # Load sand border image
         original = pygame.image.load('gui/assets/border.png').convert_alpha()
-        border_size = int(self.window_height * 1.07)
+        border_size = int(self.window_height * .95)
         self.border_image = pygame.transform.smoothscale(original, (border_size, border_size))
 
         # Load dice images
@@ -170,12 +171,6 @@ class Renderer:
             dice_size = int(self.window_width * 0.1)
             img = pygame.transform.smoothscale(img, (dice_size, dice_size))
             self.dice_images[i] = img
-
-        # Load diceroll prompt image
-        diceroll_path = os.path.join(dice_folder, "diceroll.png")
-        self.diceroll_image = pygame.image.load(diceroll_path).convert_alpha()
-        diceroll_size = int(self.window_width * 0.15)
-        self.diceroll_image = pygame.transform.smoothscale(self.diceroll_image, (diceroll_size, diceroll_size))
         
         # Load development card icons if available
         try:
@@ -276,7 +271,7 @@ class Renderer:
     
     def draw_dice(self):
         """Draw dice 1 and dice 2 on the bottom right of the screen."""
-        margin_x = self.window_width * .2
+        margin_x = self.window_width * .25
         margin_y = 0
 
         dice_size = self.dice_images[1].get_width()
@@ -326,7 +321,7 @@ class Renderer:
     
     def draw_player_status(self):
         """Draw player status panel on the right side of the screen"""
-        panel_width = int(self.window_width * 0.2)  # 20% of screen width
+        panel_width = int(self.window_width * 0.25)
         panel_height = self.window_height
         panel_x = self.window_width - panel_width
         
@@ -358,60 +353,55 @@ class Renderer:
             y_pos += 35
             
             # Settlements and Roads count
-            if player.settlements:
-                settlements_text = self.font.render(f"Settlements: {len(player.settlements)}", True, TEXT_COLOR)
-                self.screen.blit(settlements_text, (panel_x + 15, y_pos))
-                y_pos += 20
+            settlements_text = self.font.render(f"Settlements: {len(player.settlements)}", True, TEXT_COLOR)
+            self.screen.blit(settlements_text, (panel_x + 15, y_pos))
+            y_pos += 20
             
-            if player.roads:
-                roads_text = self.font.render(f"Roads: {len(player.roads)}", True, TEXT_COLOR)
-                self.screen.blit(roads_text, (panel_x + 15, y_pos))
-                y_pos += 20
+            roads_text = self.font.render(f"Roads: {len(player.roads)}", True, TEXT_COLOR)
+            self.screen.blit(roads_text, (panel_x + 15, y_pos))
+            y_pos += 20
             
-            if (self.game_logic.state.current_phase != GamePhase.SETUP_PHASE_1):                
-                y_pos += 5
-                resources_title = self.font.render("Resources:", True, TEXT_COLOR)
-                self.screen.blit(resources_title, (panel_x + 15, y_pos))
-                y_pos += 20
-                card_margin = 5
-                resources_order = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
-                num_cards = len(resources_order)
-                # Compute card width based on the available panel width
-                card_width = (panel_width - (num_cards + 1) * card_margin) / num_cards
-                card_height = card_width * 1.2  # Adjust this ratio as needed
-                x_start = panel_x + card_margin
-                y_resource = y_pos  # Use the current y position as the top of the resource cards row
+            # Resource Cards
+            y_pos += 5
+            card_margin = 15
+            resources_order = [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]
+            num_cards = len(resources_order)
+            # Compute card width based on the available panel width
+            card_width = ((panel_width - (num_cards + 1) * card_margin) / num_cards)
+            card_height = card_width * 1.2  # Adjust this ratio as needed
+            x_start = panel_x + card_margin
+            y_resource = y_pos  # Use the current y position as the top of the resource cards row
+            
+            for res in resources_order:
+                rect = pygame.Rect(x_start, y_resource, card_width, card_height)
+                color = RESOURCE_COLORS.get(res, TEXT_COLOR)
+                pygame.draw.rect(self.screen, color, rect)
+                pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
                 
-                for res in resources_order:
-                    rect = pygame.Rect(x_start, y_resource, card_width, card_height)
-                    color = RESOURCE_COLORS.get(res, TEXT_COLOR)
-                    pygame.draw.rect(self.screen, color, rect)
-                    pygame.draw.rect(self.screen, TEXT_COLOR, rect, 2)
-                    
-                    count = player.resources.get(res, 0)
-                    count_text = self.font.render(str(count), True, TEXT_COLOR)
-                    text_rect = count_text.get_rect(center=rect.center)
-                    self.screen.blit(count_text, text_rect)
- 
-                    x_start += card_width + card_margin
+                count = player.resources.get(res, 0)
+                count_text = self.font.render(str(count), True, TEXT_COLOR)
+                text_rect = count_text.get_rect(center=rect.center)
+                self.screen.blit(count_text, text_rect)
 
-                y_pos += card_height + card_margin
+                x_start += card_width + card_margin
+
+            y_pos += card_height + card_margin
             
             # Add spacing between players
             y_pos += 15
             
     def draw_robber_placement(self, robber_placement_active=False):
         """Highlight hexes for robber placement when needed"""
-        if not self.game_logic.state.awaiting_robber_placement and not robber_placement_active:
-            return
-            
-        # Draw an overlay on current robber hex
+
         if self.game_logic.state.robber_hex_id is not None:
             center = self.hex_centers[self.game_logic.state.robber_hex_id]
             pygame.draw.circle(self.screen, (0, 0, 0, 128), center, self.number_circle_radius * 1.5)
             robber_text = self.info_font.render("R", True, (255, 255, 255))
             robber_rect = robber_text.get_rect(center=center)
             self.screen.blit(robber_text, robber_rect)
+
+        if not self.game_logic.state.awaiting_robber_placement and not robber_placement_active:
+            return
         
         # Instruction text
         if self.game_logic.state.awaiting_robber_placement or robber_placement_active:
@@ -446,3 +436,104 @@ class Renderer:
             text = self.info_font.render(f"{player.name}", True, TEXT_COLOR)
             text_rect = text.get_rect(center=button_rect.center)
             self.screen.blit(text, text_rect)
+
+    def draw_dev_card_menu(self):
+        """Draw development cards at the bottom of the screen"""
+        # Only show for human players
+        if not self.game_logic.is_current_player_human():
+            return
+            
+        curr_player = self.game_logic.state.get_current_player()
+        
+        # Define card types and buy option
+        card_types = [
+            DevCardType.KNIGHT, 
+            DevCardType.ROAD_BUILDING, 
+            DevCardType.YEAR_OF_PLENTY, 
+            DevCardType.MONOPOLY, 
+            DevCardType.VICTORY_POINT,
+            "BUY"
+        ]
+        
+        # Create dev card buttons
+        self.dev_card_buttons = []
+        
+        # Calculate card dimensions
+        card_width = 40
+        card_height = 60
+        spacing = 5
+        total_width = (card_width + spacing) * len(card_types) - spacing
+        
+        # Center the row of cards at the bottom of the screen
+        start_x = (self.window_width * 0.8 - total_width) / 2 - 20
+        start_y = self.window_height - card_height - 10  # 10px margin from bottom
+        
+        # Count cards
+        card_counts = {}
+        for card_type in card_types:
+            if card_type == "BUY":
+                continue
+            card_counts[card_type] = sum(1 for card in curr_player.dev_cards if card.card_type == card_type)
+        
+        # Abbreviations for cards
+        title_map = {
+            DevCardType.KNIGHT: "KNT",
+            DevCardType.ROAD_BUILDING: "RB",
+            DevCardType.YEAR_OF_PLENTY: "YOP",
+            DevCardType.MONOPOLY: "MONO",
+            DevCardType.VICTORY_POINT: "VP"
+        }
+        
+        # Draw each card
+        for i, card_type in enumerate(card_types):
+            x = start_x + (card_width + spacing) * i
+            y = start_y
+            
+            # Create button rectangle
+            card_rect = pygame.Rect(x, y, card_width, card_height)
+            pygame.draw.rect(self.screen, DEV_CARD_COLOR, card_rect)
+            pygame.draw.rect(self.screen, TEXT_COLOR, card_rect, 1)  # Border
+            
+            # Draw title
+            if card_type == "BUY":
+                title = "BUY"
+                subtitle = "DEV"
+            else:
+                title = title_map[card_type]
+                subtitle = ""
+            
+            # Draw title text
+            title_text = self.card_font.render(title, True, TEXT_COLOR)
+            title_rect = title_text.get_rect(center=(x + card_width/2, y + 15))
+            self.screen.blit(title_text, title_rect)
+            
+            # Draw subtitle or icon
+            if card_type == "BUY":
+                subtitle_text = self.card_font.render(subtitle, True, TEXT_COLOR)
+                subtitle_rect = subtitle_text.get_rect(center=(x + card_width/2, y + card_height/2))
+                self.screen.blit(subtitle_text, subtitle_rect)
+            elif self.dev_card_icons and card_type in self.dev_card_icons:
+                icon = self.dev_card_icons[card_type]
+                icon_size = min(card_width - 10, card_height // 2)
+                scaled_icon = pygame.transform.scale(icon, (icon_size, icon_size))
+                icon_rect = scaled_icon.get_rect(center=(x + card_width/2, y + card_height/2))
+                self.screen.blit(scaled_icon, icon_rect)
+            
+            # Draw count for non-buy cards
+            if card_type != "BUY":
+                count = card_counts.get(card_type, 0)
+                count_text = self.card_font.render(f"x{count}", True, TEXT_COLOR)
+                count_rect = count_text.get_rect(center=(x + card_width/2, y + card_height - 15))
+                self.screen.blit(count_text, count_rect)
+            
+            # Store button for click detection
+            action_key = "buy_dev_card" if card_type == "BUY" else f"play_{card_type.value}"
+            self.dev_card_buttons.append((action_key, card_rect))
+
+    def check_dev_card_button(self, mouse_pos):
+        """Check if a dev card button was clicked"""
+        if hasattr(self, 'dev_card_buttons'):
+            for action, button_rect in self.dev_card_buttons:
+                if button_rect.collidepoint(mouse_pos):
+                    return action
+        return None

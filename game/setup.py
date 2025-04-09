@@ -79,12 +79,12 @@ def advance_setup_phase(state):
             state.current_player_idx -= 1
 
 def is_valid_initial_settlement(state, spot_id):
-        """Check if a spot is valid for initial settlement placement"""
-        spot = state.board.get_spot(spot_id)
-        
-        # Make sure the spot exists and is free
-        if spot is None or spot.player_idx is not None:
-            return False
+    """Check if a spot is valid for initial settlement placement"""
+    spot = state.board.get_spot(spot_id)
+    
+    # Make sure the spot exists and is free
+    if spot is None or spot.player_idx is not None:
+        return False
 
-        # Check distance rule
-        return is_two_spots_away_from_settlement(state, spot_id)
+    # Check distance rule
+    return is_two_spots_away_from_settlement(state, spot_id)

@@ -22,6 +22,7 @@ class GameState:
         # state for dev cards
         self.dev_card_played_this_turn = False
         self.awaiting_robber_placement = False
+        self.awaiting_steal_selection = False
         self.robber_hex_id = None  # Current location of the robber
         self.awaiting_resource_selection = False
         self.awaiting_resource_selection_count = 0  # For Year of Plenty

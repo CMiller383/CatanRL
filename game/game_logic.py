@@ -1,4 +1,5 @@
-from game.player_actions import build_settlement, buy_development_card, end_turn, move_robber, place_free_road, place_road, play_knight_card, play_monopoly_card, play_road_building_card, play_year_of_plenty_card, roll_dice, select_monopoly_resource, select_year_of_plenty_resource, upgrade_to_city
+from game.action import Action
+from game.player_actions import build_settlement, buy_development_card, end_turn, move_robber, place_free_road, place_road, play_knight_card, play_monopoly_card, play_road_building_card, play_year_of_plenty_card, roll_dice, select_monopoly_resource, select_year_of_plenty_resource, steal_resource_from_player, upgrade_to_city
 from game.possible_action_generator import get_possible_actions
 from game.setup import place_initial_road, place_initial_settlement
 from .enums import ActionType, GamePhase
@@ -35,21 +36,20 @@ class GameLogic:
         return self.state.current_phase == GamePhase.REGULAR_PLAY
     
     def user_can_end_turn(self):
-        return "end_turn" in self.state.possible_actions and self.is_current_player_human()
+        return Action(ActionType.END_TURN) in self.state.possible_actions and self.is_current_player_human()
     
     def do_action(self, action):
         """Execute a game move"""
         state = self.state
-
+        print(state.current_player_idx)
         print(action)
-        print(state.possible_actions)
+        
 
         if state.current_phase != GamePhase.REGULAR_PLAY or action not in state.possible_actions:
             return False
         
         match action.type:
             case ActionType.ROLL_DICE:
-                print("here")
                 success = roll_dice(state)
             case ActionType.END_TURN:
                 success = end_turn(state)
@@ -77,10 +77,11 @@ class GameLogic:
                 success = select_monopoly_resource(state, action.payload)
             case ActionType.MOVE_ROBBER:
                 success = move_robber(state, action.payload)
+            case ActionType.STEAL:
+                success = steal_resource_from_player(state, action.payload)
             case _:
                 success = False
 
-        print(success)
         if success:
             state.possible_actions = get_possible_actions(state)
 

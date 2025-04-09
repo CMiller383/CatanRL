@@ -80,6 +80,13 @@ class InputHandler:
                     return hex_id
         return None
     
+    def check_dev_card_button(self, mouse_pos):
+        """Check if any dev card button was clicked"""
+        if hasattr(self.renderer, 'check_dev_card_button'):
+            return self.renderer.check_dev_card_button(mouse_pos)
+        return None
+    
+    # Update the dev card handling section of the InputHandler class
     def handle_click(self, mouse_pos):
         """Process a mouse click at the given position"""
         # Don't process clicks on the player panel area (right 20% of screen)
@@ -133,9 +140,9 @@ class InputHandler:
             
         # Steal from player
         if 'steal' in self.ui_handlers and self.ui_handlers['steal'].steal_buttons:
-            victim_id = self.ui_handlers['steal'].check_steal_button_click(mouse_pos)
-            if victim_id is not None:
-                self.game_logic.do_action(Action(ActionType.STEAL, victim_id))
+            victim_idx = self.ui_handlers['steal'].check_steal_button_click(mouse_pos)
+            if victim_idx is not None:
+                self.game_logic.do_action(Action(ActionType.STEAL, victim_idx))
                 self.ui_handlers['steal'].clear_steal_selection()
                 return
                 
@@ -144,97 +151,72 @@ class InputHandler:
             resource_action = self.ui_handlers['resource'].check_resource_selection_click(mouse_pos)
             if resource_action:
                 action_type, resource = resource_action
-                if action_type == "year_of_plenty" and self.game_logic.state.awaiting_resource_selection:
+                if action_type == "year_of_plenty":
                     self.game_logic.do_action(Action(ActionType.SELECT_YEAR_OF_PLENTY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Year of Plenty")
-                elif action_type == "monopoly" and self.game_logic.state.awaiting_monopoly_selection:
+                elif action_type == "monopoly":
                     self.game_logic.select_monopoly_resource(resource)
                     self.game_logic.do_action(Action(ActionType.SELECT_MONOPOLY_RESOURCE, resource))
                     print(f"Selected {resource.name} for Monopoly")
                 return
-                
-        # Handle development card actions
-        if 'devcards' in self.ui_handlers:
-            dev_card_idx = self.ui_handlers['devcards'].check_dev_card_click(mouse_pos)
-            if dev_card_idx is not None:
-                self.ui_handlers['devcards'].selected_dev_card = dev_card_idx
-                return
-            
-            dev_card_action = self.ui_handlers['devcards'].check_dev_card_action_click(mouse_pos)
-            if dev_card_action:
-                if dev_card_action == "buy_dev_card":
-                    success = self.game_logic.do_action(Action(ActionType.BUY_DEV_CARD))
-                    if success:
-                        print("Bought development card")
-                    else:
-                        print("Failed to buy development card")
-                elif dev_card_action == "play_knight":
-                    success = self.game_logic.do_action(Action(ActionType.PLAY_KNIGHT_CARD))
-                    if success:
-                        print("Played Knight card")
-                        self.robber_placement_active = True
-                elif dev_card_action == "play_road_building":
-                    success = self.game_logic.do_action(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
-                    if success:
-                        print("Played Road Building card")
-                elif dev_card_action == "play_year_of_plenty":
-                    success = self.game_logic.do_action(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
-                    if success:
-                        print("Played Year of Plenty card")
-                elif dev_card_action == "play_monopoly":
-                    success = self.game_logic.do_action(Action(ActionType.PLAY_MONOPOLY_CARD))
-                    if success:
-                        print("Played Monopoly card")
-                
-                # Clear selection after action
-                self.ui_handlers['devcards'].selected_dev_card = None
-                return
-            
+        
+        # Check dev card buttons
+        dev_card_action = self.check_dev_card_button(mouse_pos)
+        if dev_card_action:
+            if dev_card_action == "buy_dev_card":
+                success = self.game_logic.do_action(Action(ActionType.BUY_DEV_CARD))
+                if success:
+                    print("Bought development card")
+                else:
+                    print("Failed to buy development card")
+            elif dev_card_action == "play_knight":
+                success = self.game_logic.do_action(Action(ActionType.PLAY_KNIGHT_CARD))
+                if success:
+                    print("Played Knight card")
+                    self.robber_placement_active = True
+                else:
+                    print("Failed to play Knight card")
+            elif dev_card_action == "play_road_building":
+                success = self.game_logic.do_action(Action(ActionType.PLAY_ROAD_BUILDING_CARD))
+                if success:
+                    print("Played Road Building card")
+                else:
+                    print("Failed to play Road Building card")
+            elif dev_card_action == "play_year_of_plenty":
+                success = self.game_logic.do_action(Action(ActionType.PLAY_YEAR_OF_PLENTY_CARD))
+                if success:
+                    print("Played Year of Plenty card")
+                else:
+                    print("Failed to play Year of Plenty card")
+            elif dev_card_action == "play_monopoly":
+                success = self.game_logic.do_action(Action(ActionType.PLAY_MONOPOLY_CARD))
+                if success:
+                    print("Played Monopoly card")
+                else:
+                    print("Failed to play Monopoly card")
+            return
+        
         # Roll dice
         if self.check_dice_click(mouse_pos):
             self.game_logic.do_action(Action(ActionType.ROLL_DICE))
             return
-
-        # Handle road building (from dev card)
-        if self.game_logic.state.road_building_roads_placed > 0 and self.game_logic.state.road_building_roads_placed < 2:
-            road_id = self.check_road_click(mouse_pos)
-            if road_id is not None:
-                success = self.game_logic.place_free_road(road_id)
-                if success:
-                    print(f"Placed free road at {road_id}")
-                else:
-                    print(f"Failed to place free road at {road_id}")
-                return
         
         # Regular build actions
         spot_id = self.check_spot_click(mouse_pos)
         if spot_id is not None:
-            # Check for build/upgrade actions
-            if ("build_settlement", spot_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(Action(ActionType.BUILD_SETTLEMENT, spot_id))
-                if success:
-                    print(f"Built settlement at spot {spot_id}")
-                else:
-                    print(f"Failed to build settlement at {spot_id}")
-            elif ("upgrade_city", spot_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(Action(ActionType.UPGRADE_TO_CITY, spot_id))
-                if success:
-                    print(f"Upgraded to city at spot {spot_id}")
-                else:
-                    print(f"Failed to upgrade to city at {spot_id}")
+            if self.game_logic.do_action(Action(ActionType.UPGRADE_TO_CITY, spot_id)):
+                print(f"Upgraded to city at spot {spot_id}")
+            elif self.game_logic.do_action(Action(ActionType.BUILD_SETTLEMENT, spot_id)):
+                print(f"Built settlement at spot {spot_id}")
             else:
                 print(f"No valid action available at spot {spot_id}")
-            return
         
         # Build road
         road_id = self.check_road_click(mouse_pos)
         if road_id is not None:
-            if ("road", road_id) in self.game_logic.state.possible_actions:
-                success = self.game_logic.do_action(Action(ActionType.BUILD_ROAD, road_id))
-                if success:
-                    print(f"Built road at {road_id}")
-                else:
-                    print(f"Failed to build road at {road_id}")
+            if self.game_logic.do_action(Action(ActionType.PLACE_FREE_ROAD, road_id)):
+                print(f"Placed free road at {road_id}")
+            elif self.game_logic.do_action(Action(ActionType.BUILD_ROAD, road_id)):
+                print(f"Built road at {road_id}")
             else:
-                print(f"No valid road action at {road_id}")
-            return
+                print(f"Failed to build road at {road_id}")

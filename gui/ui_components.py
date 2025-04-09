@@ -2,9 +2,10 @@
 UI components for the Catan game GUI.
 """
 import pygame
+from game.action import Action
 from gui.constants import *
 from game.development_card import DevCardType
-from game.enums import GamePhase, Resource
+from game.enums import ActionType, GamePhase, Resource
 
 class DevCardHandler:
     def __init__(self, game_logic, screen, window_width, window_height, fonts, dev_card_icons=None):
@@ -24,7 +25,7 @@ class DevCardHandler:
 
     def draw_development_cards(self):
         """Draw development cards panel and controls for the current player"""
-        if self.game_logic.state != GamePhase.REGULAR_PLAY or not self.game_logic.is_current_player_human():
+        if self.game_logic.state.current_phase != GamePhase.REGULAR_PLAY or not self.game_logic.is_current_player_human():
             return  # Only show dev cards in regular play phase for human players
             
         curr_player = self.game_logic.state.get_current_player()
@@ -41,8 +42,8 @@ class DevCardHandler:
         
         # Only draw if player has dev cards or can buy them
         has_dev_cards = len(curr_player.dev_cards) > 0
-        can_buy_dev_card = "buy_dev_card" in self.game_logic.state.possible_actions
-        
+        can_buy_dev_card = Action(ActionType.BUY_DEV_CARD) in self.game_logic.state.possible_actions
+
         if not (has_dev_cards or can_buy_dev_card):
             return
             
@@ -61,6 +62,7 @@ class DevCardHandler:
         card_area_height = panel_height - 60
         
         # Buy dev card button
+        
         if can_buy_dev_card:
             buy_button_width = 120
             buy_button_height = 30

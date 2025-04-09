@@ -16,6 +16,14 @@ def get_possible_actions(state):
                 actions.add(Action(ActionType.MOVE_ROBBER, payload=hex_id))
         return actions
 
+    if state.awaiting_steal_selection:
+        if not state.potential_victims:
+            state.awaiting_steal_selection = False
+        else:
+            for potential_victim in state.potential_victims:
+                actions.add(Action(ActionType.STEAL, potential_victim))
+            return actions
+
     if state.awaiting_resource_selection:
         for resource in Resource:
             if resource != Resource.DESERT:
