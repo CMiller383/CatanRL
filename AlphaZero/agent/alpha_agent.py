@@ -23,7 +23,7 @@ class AlphaZeroAgent(Agent):
             action_mapper: Converts between game actions and network indices
             mcts: MCTS instance for action selection
         """
-        super().__init__(player_id, AgentType.HEURISTIC)  # Use HEURISTIC as a placeholder
+        super().__init__(player_id, AgentType.ALPHAZERO)
         self.network = network
         self.state_encoder = state_encoder
         self.action_mapper = action_mapper
@@ -60,7 +60,6 @@ class AlphaZeroAgent(Agent):
         
         for spot_id, spot in state.board.spots.items():
             if is_valid_initial_settlement(state, spot_id):
-                # Calculate a score based on resource diversity and probability
                 score = 0
                 resources = set()
                 
@@ -68,11 +67,9 @@ class AlphaZeroAgent(Agent):
                     hex_obj = state.board.get_hex(hex_id)
                     resources.add(hex_obj.resource)
                     
-                    # Add score based on dice probability
-                    if hex_obj.number > 0:  # Skip desert
+                    if hex_obj.number > 0:  
                         score += pip_values.get(hex_obj.number, 0)
                 
-                # Bonus for resource diversity
                 score += len(resources) * 2
                 
                 if score > best_score:
@@ -99,8 +96,7 @@ class AlphaZeroAgent(Agent):
                 valid_roads.append(road_id)
         
         if valid_roads:
-            # For now, just choose randomly
-            # In the future, we could use the neural network here too
+            # random for now whatever
             return random.choice(valid_roads)
         
         return None
@@ -125,7 +121,7 @@ class AlphaZeroAgent(Agent):
         
         # Use MCTS to find the best action
         action_probs, value_estimate = self.mcts.search(state)
-        
+        # print(f"AlphaZero action probabilities: {action_probs}")
         # Record state and policy for training
         if self.training_mode:
             state_tensor = self.state_encoder.encode_state(state)
@@ -134,7 +130,7 @@ class AlphaZeroAgent(Agent):
                 'player': state.current_player_idx,
                 'action_probs': action_probs,
                 'value': value_estimate,
-                'reward': None  # To be filled in later
+                'reward': None  # need to make this
             })
         
         # Select the action based on the policy
@@ -145,9 +141,11 @@ class AlphaZeroAgent(Agent):
             # Choose the action with the highest probability
             if action_probs:
                 action = max(action_probs.items(), key=lambda x: x[1])[0]
+                print(f"AlphaZero chose action: {action}")
                 return action
             else:
                 # Fallback to random action if MCTS failed
+                # print(f"MTCS failed, choosing random action")
                 return random.choice(list(state.possible_actions))
     
     def record_game_result(self, final_reward):

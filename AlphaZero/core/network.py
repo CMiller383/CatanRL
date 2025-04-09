@@ -92,8 +92,13 @@ class CatanNetwork(nn.Module):
                 mask = torch.ones_like(policy_logits) * float('-inf')
                 mask[0, valid_actions] = 0
             else:
-                # Assume it's already a boolean mask
-                mask = torch.where(valid_actions, 0.0, float('-inf'))
+                if not isinstance(valid_actions, torch.Tensor):
+                    valid_actions = torch.tensor(valid_actions)
+                
+                # Create the mask
+                mask = torch.where(valid_actions, 
+                                torch.tensor(0.0), 
+                                torch.tensor(float('-inf')))
             
             # Apply mask
             policy_logits = policy_logits + mask

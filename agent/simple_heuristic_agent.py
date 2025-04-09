@@ -27,6 +27,7 @@ class SimpleHeuristicAgent(Agent):
                         continue
                     pip = pip_values.get(hex_obj.number, 0)
                     score += pip
+                    
                 if score > best_score:
                     best_score = score
                     best_spot = spot_id
