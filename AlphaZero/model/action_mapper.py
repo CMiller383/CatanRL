@@ -68,6 +68,10 @@ class ActionMapper:
         Returns:
             index: Integer index representing the action
         """
+        # print(f"\n--- Action to Index Debug ---")
+        # print(f"Action Type: {action.type}")
+        # print(f"Action Payload: {action.payload}")
+        # print(f"Payload Type: {type(action.payload)}")
         # Handle simple actions without payloads
         if action.type in [ActionType.ROLL_DICE, ActionType.END_TURN, 
                           ActionType.BUY_DEV_CARD, ActionType.PLAY_KNIGHT_CARD,

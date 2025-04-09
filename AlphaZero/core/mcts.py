@@ -48,7 +48,7 @@ class MCTSNode:
             action: The selected action
             child: The selected child node
         """
-        # UCB formula: Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
+        # UCB forrmula Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a)) https://www.turing.com/kb/guide-on-upper-confidence-bound-algorithm-in-reinforced-learning
         best_score = float('-inf')
         best_action = None
         best_child = None

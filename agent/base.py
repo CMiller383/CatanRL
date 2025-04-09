@@ -5,6 +5,7 @@ class AgentType(Enum):
     HUMAN = 0
     RANDOM = 1
     HEURISTIC = 2
+    ALPHAZERO = 3
 
     # Future agent types here
 
@@ -32,5 +33,8 @@ def create_agent(player_id, agent_type):
     elif agent_type == AgentType.HEURISTIC:
         from agent.simple_heuristic_agent import SimpleHeuristicAgent
         return SimpleHeuristicAgent(player_id)
+    elif agent_type == AgentType.ALPHAZERO:
+        from AlphaZero.agent.alpha_agent import create_alpha_agent
+        return create_alpha_agent(player_id)
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")

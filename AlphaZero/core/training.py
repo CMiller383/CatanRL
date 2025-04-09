@@ -44,7 +44,7 @@ class SelfPlayWorker:
             # Create a new game and agent
             game = self.game_creator()
             agent = self.agent_creator(player_id=0)
-            agent.set_training_mode(True)
+            agent.set_training_mode(False)
             
             # Replace the first agent in the game
             game.agents[0] = agent
@@ -52,7 +52,7 @@ class SelfPlayWorker:
             # Handle the setup phase
             while not game.is_setup_complete():
                 game.process_ai_turn()
-            
+            print("Setup complete")
             # Play the game
             move_count = 0
             max_moves = self.config.get('max_moves', 200)
@@ -60,16 +60,21 @@ class SelfPlayWorker:
             # Main game loop
             while not self._is_game_over(game.state) and move_count < max_moves:
                 move_count += 1
-                
+                print(f"Move {move_count}")
                 # If it's our agent's turn
-                if game.state.current_player_idx == 0:
-                    # Get action from agent
-                    action = agent.get_action(game.state)
-                    game.do_action(action)
-                else:
-                    # Other players' turns
-                    game.process_ai_turn()
-            
+                game.process_ai_turn()
+                # if game.state.current_player_idx == 0:
+                #     # Get action from agent
+                #     action = agent.get_action(game.state)
+                #     game.do_action(action)
+                # else:
+                #     # Other players' turns
+                #     game.process_ai_turn()
+            #print agent types
+            #print game.agents[0].__class__.__name__)
+            #print game.agents[1].__class__.__name__)
+            #print game.agents[2].__class__.__name__)
+            #print game.agents[3].__class__.__name__)
             # Game is over, calculate rewards
             reward = self._calculate_reward(game.state, player_id=0)
             
