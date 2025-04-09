@@ -21,18 +21,10 @@ class Agent:
         """To be implemented by subclasses"""
         raise NotImplementedError("Subclasses must implement get_action method")
 
-class HumanAgent(Agent):
-    """Human player agent - actions are driven by UI input"""
-    def __init__(self, player_id):
-        super().__init__(player_id, AgentType.HUMAN)
-    
-    def get_action(self, game_state):
-        # Human actions are handled through the UI, not here
-        return None
-
 def create_agent(player_id, agent_type):
     """Factory function to create appropriate agent type"""
     if agent_type == AgentType.HUMAN:
+        from agent.human_agent import HumanAgent
         return HumanAgent(player_id)
     elif agent_type == AgentType.RANDOM:
         from agent.random_agent import RandomAgent
