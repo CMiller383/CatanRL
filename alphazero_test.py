@@ -269,7 +269,7 @@ try:
     pipeline.self_play_worker.generate_games = generate_one_game
 
     # Now run one iteration
-    pipeline.train(1)
+    pipeline.train(1, testing=True)
     
     print("Pipeline test passed")
 except Exception as e:

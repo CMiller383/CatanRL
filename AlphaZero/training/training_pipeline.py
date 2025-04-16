@@ -93,7 +93,7 @@ class TrainingPipeline:
         # Create model directory
         os.makedirs(self.config['model_dir'], exist_ok=True)
         
-    def train(self, num_iterations=None, resume_from=None):
+    def train(self, num_iterations=None, resume_from=None, testing=False):
         """
         Run the training pipeline for a number of iterations
         
@@ -190,8 +190,9 @@ class TrainingPipeline:
         self.log(f"Total time: {total_time:.2f}s ({total_time/3600:.2f}h)")
         
         # Save final model and plots
-        self.save_model(self.current_iteration)
-        self.plot_metrics()
+        if not testing:
+            self.save_model(self.current_iteration)
+            self.plot_metrics()
         # Close log file
         self.log_file.close()
     

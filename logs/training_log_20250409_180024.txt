@@ -1,2 +1,0 @@
-AlphaZero Catan Training started at 20250409_180024
-Configuration: {'state_dim': 992, 'action_dim': 200, 'hidden_dim': 128, 'num_simulations': 10, 'self_play_games': 1, 'eval_games': 1, 'epochs': 1, 'batch_size': 16, 'buffer_size': 1000, 'max_moves': 50, 'learning_rate': 0.001, 'num_iterations': 1}
