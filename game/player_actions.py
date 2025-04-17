@@ -336,3 +336,27 @@ def steal_resource_from_player(state, victim_idx):
         
     state.awaiting_steal_selection = False
     return True
+
+def trade_resources(state, trade_payload):
+    """
+    Execute a 4:1 trade
+    
+    Args:
+        state: The game state
+        trade_payload: Tuple of (resource_to_give, resource_to_get)
+    
+    Returns:
+        success: Whether the trade was successful
+    """
+    resource_to_give, resource_to_get = trade_payload
+    player = state.get_current_player()
+    
+    # Check if player has enough of the resource to give
+    if player.resources[resource_to_give] < 4:
+        return False
+    
+    # Execute the trade
+    player.resources[resource_to_give] -= 4
+    player.resources[resource_to_get] += 1
+    
+    return True

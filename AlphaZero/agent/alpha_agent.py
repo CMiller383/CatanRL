@@ -149,6 +149,12 @@ class AlphaZeroAgent(Agent):
             print(f"Settlements: {player.settlements}")
             print(f"Cities: {player.cities}")
             print(f"Roads: {player.roads}")
+            trade_moves = [act for act in state.possible_actions if act.type == ActionType.TRADE_RESOURCES]
+            if trade_moves:
+                print(f"Available trades: {len(trade_moves)}")
+                for trade in trade_moves[:3]:  # Show just a few
+                    give, get = trade.payload
+                    print(f"  - Trade 4 {give.name} for 1 {get.name}")
         
         # If only one valid action, take it (common for must-move situations)
         if len(state.possible_actions) == 1:

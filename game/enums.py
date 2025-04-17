@@ -43,3 +43,4 @@ class ActionType(Enum):
     STEAL = "steal_resource"
     SELECT_YEAR_OF_PLENTY_RESOURCE = "select_year_of_plenty_resource"
     SELECT_MONOPOLY_RESOURCE = "select_monopoly_resource"
+    TRADE_RESOURCES = "trade_resources"

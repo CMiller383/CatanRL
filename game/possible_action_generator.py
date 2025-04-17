@@ -105,5 +105,11 @@ def get_possible_actions(state):
         for road_id, road in state.board.roads.items():
             if road.owner is None and is_road_connected(state, road_id):
                 actions.add(Action(ActionType.BUILD_ROAD, payload=road_id))
-
+    # 4:1
+    for resource_to_give in [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]:
+        if curr_player.resources[resource_to_give] >= 4:
+            for resource_to_get in [Resource.WOOD, Resource.BRICK, Resource.WHEAT, Resource.SHEEP, Resource.ORE]:
+                if resource_to_give != resource_to_get:
+                    # Payload is a tuple of (resource_to_give, resource_to_get)
+                    actions.add(Action(ActionType.TRADE_RESOURCES, payload=(resource_to_give, resource_to_get)))
     return actions

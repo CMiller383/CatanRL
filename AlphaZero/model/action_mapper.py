@@ -67,6 +67,11 @@ class ActionMapper:
             
             # Actions with player selection (range: 160-163)
             "steal_resource": (160, 163),  # 4 possible players
+
+            # Actions with 4:1 trade (range: 164-184)
+            "trade_resources": (164, 184) # 20 possible trades (4 resources * 5 options)
+
+            
         }
         
         return action_space
@@ -137,6 +142,17 @@ class ActionMapper:
                 start, _ = self.action_space["steal_resource"]
                 offset = min(int(action.payload), 4)  # Player index 0-3
                 return start + offset
+            
+            #handle trading
+            elif action.type == ActionType.TRADE_RESOURCES:
+                start, _ = self.action_space["trade_resources"]
+                give_idx = self.resource_to_index[action.payload[0]]
+                get_idx = self.resource_to_index[action.payload[1]]
+                if give_idx != get_idx:  # Skip trading for the same resource
+                    offset = give_idx * 4 + get_idx
+                    if get_idx >= give_idx: # Adjust offset if get_idx is greater than give_idx
+                        offset -= 1
+                    return start + offset
             
             # Fallback for unrecognized actions
             return self.max_actions - 1  # Last index as fallback
@@ -213,7 +229,18 @@ class ActionMapper:
         elif self.action_space["steal_resource"][0] <= index <= self.action_space["steal_resource"][1]:
             player_idx = index - self.action_space["steal_resource"][0]
             return Action(ActionType.STEAL, payload=player_idx)
-        
+        # Handle trading resources
+        elif self.action_space["trade_resources"][0] <= index <= self.action_space["trade_resources"][1]:
+            offset = index - self.action_space["trade_resources"][0]
+            # Decode the resource combination
+            give_idx = offset // 4
+            get_idx = offset % 4
+            if get_idx >= give_idx:  # Adjust for skipped same-resource trades
+                get_idx += 1
+            # Convert indices to resources
+            resource_to_give = self.index_to_resource[give_idx]
+            resource_to_get = self.index_to_resource[get_idx]
+            return Action(ActionType.TRADE_RESOURCES, payload=(resource_to_give, resource_to_get))
         # If we get here, the index is invalid or not mapped
         # Return END_TURN as a safe default
         return Action(ActionType.END_TURN)

@@ -1,5 +1,5 @@
 from game.action import Action
-from game.player_actions import build_settlement, buy_development_card, end_turn, move_robber, place_free_road, place_road, play_knight_card, play_monopoly_card, play_road_building_card, play_year_of_plenty_card, roll_dice, select_monopoly_resource, select_year_of_plenty_resource, steal_resource_from_player, upgrade_to_city
+from game.player_actions import *
 from game.possible_action_generator import get_possible_actions
 from game.setup import place_initial_road, place_initial_settlement
 from .enums import ActionType, GamePhase
@@ -80,6 +80,8 @@ class GameLogic:
                 success = move_robber(state, action.payload)
             case ActionType.STEAL:
                 success = steal_resource_from_player(state, action.payload)
+            case ActionType.TRADE_RESOURCES:
+                success = trade_resources(state, action.payload)
             case _:
                 success = False
 
