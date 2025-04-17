@@ -31,6 +31,10 @@ class GameLogic:
         """Check if current player is human"""
         return self.get_current_agent().is_human()
     
+    def is_current_player_alpha_zero(self):
+        """Check if current player is AlphaZero"""
+        return self.get_current_agent().is_AlphaZero()
+    
     def is_setup_complete(self):
         """Check if the setup phase is complete"""
         return self.state.current_phase == GamePhase.REGULAR_PLAY
@@ -114,22 +118,24 @@ class GameLogic:
                 place_initial_road(state, road_id, state.last_settlement_placed)
                 state.last_settlement_placed = None
                 return True
-        
         action = agent.get_action(state)
+        # if self.is_current_player_alpha_zero():
+        #     print("AlphaZero possible actions:", state.possible_actions)
+        #     print("AlphaZero action:", action)
         while action.type != ActionType.END_TURN:
             self.do_action(action)
             action = agent.get_action(state)
 
         self.do_action(action)
 
-    def create_agent(player_idx, agent_type):
-        if agent_type == AgentType.HUMAN:
-            return None
-        elif agent_type == AgentType.RANDOM:
-            from agent.random_agent import RandomAgent
-            return RandomAgent(player_idx)
-        elif agent_type == AgentType.HEURISTIC:
-            from agent.simple_heuristic_agent import SimpleHeuristicAgent
-            return SimpleHeuristicAgent(player_idx)
-        else:
-            print("Unsupported agent type")
+    # def create_agent(player_idx, agent_type):
+    #     if agent_type == AgentType.HUMAN:
+    #         return None
+    #     elif agent_type == AgentType.RANDOM:
+    #         from agent.random_agent import RandomAgent
+    #         return RandomAgent(player_idx)
+    #     elif agent_type == AgentType.HEURISTIC:
+    #         from agent.simple_heuristic_agent import SimpleHeuristicAgent
+    #         return SimpleHeuristicAgent(player_idx)
+    #     else:
+    #         print("Unsupported agent type")

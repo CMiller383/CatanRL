@@ -4,7 +4,6 @@ from game.resource_manager import give_initial_resources
 from game.rules import is_two_spots_away_from_settlement, is_valid_initial_road
 from game.road_utils import update_longest_road
 
-
 def place_initial_settlement(state, spot_id):
     """
     Place an initial settlement during setup phase

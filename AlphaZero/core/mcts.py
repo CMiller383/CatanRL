@@ -7,6 +7,7 @@ import copy
 import random
 from collections import defaultdict
 import time
+import torch
 
 class MCTSNode:
     """
@@ -31,6 +32,7 @@ class MCTSNode:
         self.visit_count = 0
         self.value_sum = 0.0
         self.is_expanded = False
+        self.virtual_loss = 0
         
         # Debug info
         self.ucb_scores = {}  # Stores UCB scores for child selection debugging
@@ -39,7 +41,17 @@ class MCTSNode:
         """Get the current value estimate for this node"""
         if self.visit_count == 0:
             return 0.0
-        return self.value_sum / self.visit_count
+        # Apply virtual loss adjustment for better parallelization
+        virtual_loss_adjustment = -1.0 * self.virtual_loss / max(1, self.visit_count)
+        return self.value_sum / self.visit_count + virtual_loss_adjustment
+    
+    def add_virtual_loss(self):
+        """Add virtual loss to discourage threads from exploring the same nodes"""
+        self.virtual_loss += 1
+    
+    def remove_virtual_loss(self):
+        """Remove virtual loss after the evaluation is complete"""
+        self.virtual_loss = max(0, self.virtual_loss - 1)
     
     def select_child(self, c_puct=1.5):
         """
@@ -96,10 +108,13 @@ class MCTSNode:
         self.is_expanded = True
         expansion_count = 0
         
+        # Create a single deep copy of the state to reuse for efficiency
+        base_state = copy.deepcopy(self.game_state)
+        
         for action, prior in action_priors:
             if action not in self.children:
-                # Create a copy of the game state
-                next_state = copy.deepcopy(self.game_state)
+                # Create a lightweight copy of the base state
+                next_state = self._light_copy_state(base_state)
                 
                 # Apply the action to get the next state
                 try:
@@ -119,6 +134,23 @@ class MCTSNode:
         
         return expansion_count
     
+    def _light_copy_state(self, state):
+        """Create a lightweight copy of state with shared immutable components"""
+        # Shallow copy the state
+        new_state = copy.copy(state)
+        
+        # Only deep copy the mutable parts that will change
+        new_state.current_player_idx = state.current_player_idx
+        new_state.possible_actions = state.possible_actions.copy() if hasattr(state, 'possible_actions') else set()
+        
+        # Don't copy the board structure - only the ownership attributes
+        new_state.board = copy.copy(state.board)
+        
+        # Shallow copies of players (since we're careful with mutations)
+        new_state.players = [copy.copy(player) for player in state.players]
+        
+        return new_state
+    
     def _apply_action(self, state, action):
         """
         Apply an action to a state
@@ -131,7 +163,7 @@ class MCTSNode:
             success: Whether the action was applied successfully
         """
         # Check if the action is in the possible actions for this state
-        if action not in state.possible_actions:
+        if hasattr(state, 'possible_actions') and action not in state.possible_actions:
             return False
             
         # Apply the action directly
@@ -159,7 +191,7 @@ class MCTS:
     """
     Monte Carlo Tree Search algorithm for Catan
     """
-    def __init__(self, network, state_encoder, action_mapper, num_simulations=800, c_puct=1.5):
+    def __init__(self, network, state_encoder, action_mapper, num_simulations=800, c_puct=1.5, batch_size=8):
         """
         Initialize the MCTS
         
@@ -169,12 +201,14 @@ class MCTS:
             action_mapper: Mapper between actions and indices
             num_simulations: Number of simulations per move
             c_puct: Exploration constant for UCB formula
+            batch_size: Size of batches for network evaluation
         """
         self.network = network
         self.state_encoder = state_encoder
         self.action_mapper = action_mapper
         self.num_simulations = num_simulations
         self.c_puct = c_puct
+        self.batch_size = batch_size
         
         # Debug flag
         self.debug = False
@@ -198,13 +232,10 @@ class MCTS:
         state_tensor = self.state_encoder.encode_state(game_state)
         valid_action_mask = self.state_encoder.get_valid_action_mask(game_state)
         
-        import torch
-        state_tensor = torch.FloatTensor(state_tensor).unsqueeze(0)  # Add batch dimension
-        
         try:
             # Get policy and value from the network
             with torch.no_grad():
-                policy, value = self.network(state_tensor)
+                policy, value = self.network(torch.FloatTensor(state_tensor).unsqueeze(0))
                 
             # Convert to numpy for processing
             policy = policy[0].numpy()  # Remove batch dimension
@@ -234,16 +265,66 @@ class MCTS:
             # Return an empty policy if root evaluation fails
             return {}, 0.0
         
+        # Prepare arrays for batch processing
+        states_to_evaluate = []
+        nodes_pending_evaluation = []
+        
         # Run simulations
         simulation_count = 0
         for _ in range(self.num_simulations):
-            try:
-                success = self._simulate(root)
-                if success:
-                    simulation_count += 1
-            except Exception as e:
-                if self.debug:
-                    print(f"Error in simulation: {e}")
+            # Select a node to evaluate
+            node, path = self._select_node_for_evaluation(root)
+            if node and node.game_state:
+                # If we found a node to evaluate, add it to our batch
+                try:
+                    states_to_evaluate.append(self.state_encoder.encode_state(node.game_state))
+                    nodes_pending_evaluation.append((node, path))
+                except Exception as e:
+                    if self.debug:
+                        print(f"Error encoding state: {e}")
+                    # Remove virtual loss
+                    for n in path:
+                        n.remove_virtual_loss()
+                    continue
+                
+                # If we have enough nodes or this is the last simulation, evaluate them
+                if len(states_to_evaluate) >= self.batch_size or _ == self.num_simulations - 1:
+                    if states_to_evaluate:
+                        # Batch evaluate the states
+                        try:
+                            # Convert list of arrays to a single numpy array first (fixes warning)
+                            states_np_array = np.array(states_to_evaluate, dtype=np.float32)
+                            batch_tensor = torch.FloatTensor(states_np_array)
+                            with torch.no_grad():
+                                batch_policies, batch_values = self.network(batch_tensor)
+                            
+                            # Process each result and backpropagate
+                            for i, (eval_node, eval_path) in enumerate(nodes_pending_evaluation):
+                                try:
+                                    # Complete the evaluation with the network results
+                                    policy = batch_policies[i].numpy()
+                                    value = batch_values[i].item()
+                                    
+                                    # Process the evaluation
+                                    self._process_evaluation(eval_node, eval_path, policy, value)
+                                    simulation_count += 1
+                                except Exception as e:
+                                    if self.debug:
+                                        print(f"Error processing evaluation: {e}")
+                                    # Remove virtual loss
+                                    for n in eval_path:
+                                        n.remove_virtual_loss()
+                        except Exception as e:
+                            if self.debug:
+                                print(f"Error in batch evaluation: {e}")
+                            # Remove virtual loss from all nodes
+                            for _, path in nodes_pending_evaluation:
+                                for n in path:
+                                    n.remove_virtual_loss()
+                        
+                        # Clear batches for next round
+                        states_to_evaluate = []
+                        nodes_pending_evaluation = []
         
         if self.debug:
             print(f"Completed {simulation_count} successful simulations out of {self.num_simulations} attempts")
@@ -255,74 +336,68 @@ class MCTS:
         # Return action probabilities and the value estimate
         return action_probs, root.value()
     
-    def _simulate(self, root):
-        """
-        Run a single MCTS simulation
-        
-        Args:
-            root: The root node to start simulation from
-            
-        Returns:
-            success: Whether the simulation was successful
-        """
-        # Selection phase: traverse the tree to a leaf node
+    def _select_node_for_evaluation(self, root):
+        """Select a node that needs evaluation and return its search path"""
         node = root
         search_path = [node]
         
-        while node.is_expanded and node.children:
-            action, node = node.select_child(self.c_puct)
-            if node is None:
-                if self.debug:
-                    print("Warning: select_child returned None")
-                return False
-            search_path.append(node)
+        # Add virtual loss during selection to discourage other threads
+        node.add_virtual_loss()
         
-        # Expansion and evaluation phase
-        # Only expand nodes that are not terminal
-        if not self._is_terminal(node.game_state):
-            # Encode the state for the neural network
-            state_tensor = self.state_encoder.encode_state(node.game_state)
+        # Selection phase - traverse down the tree
+        while node.is_expanded and node.children:
+            # Check if any children have zero visits - prioritize them
+            unexplored = [(a, n) for a, n in node.children.items() if n.visit_count == 0]
+            if unexplored:
+                action, node = random.choice(unexplored)
+            else:
+                action, node = node.select_child(self.c_puct)
+            
+            if node is None:
+                # Remove virtual loss and return none
+                for n in search_path:
+                    n.remove_virtual_loss()
+                return None, []
+            
+            # Add virtual loss
+            node.add_virtual_loss()
+            search_path.append(node)
+            
+            # Early pruning - skip nodes in heavily explored paths that have very poor value
+            if len(search_path) > 2 and search_path[-2].visit_count > 10:
+                if node.visit_count > 3 and node.value() < -0.8:
+                    # Remove virtual loss
+                    for n in search_path:
+                        n.remove_virtual_loss()
+                    return None, []  # Skip this path
+        
+        return node, search_path
+    
+    def _process_evaluation(self, node, search_path, policy, value):
+        """Process network evaluation for a node"""
+        try:
+            # Get valid actions
             valid_action_mask = self.state_encoder.get_valid_action_mask(node.game_state)
             
-            # Get policy and value from the network
-            import torch
-            state_tensor = torch.FloatTensor(state_tensor).unsqueeze(0)
+            # Create action priors for valid actions
+            action_priors = []
+            for i, valid in enumerate(valid_action_mask):
+                if valid:
+                    # Convert index back to action
+                    action = self.action_mapper.index_to_action(i, node.game_state)
+                    # Check if the action is valid in the current state
+                    if action in node.game_state.possible_actions:
+                        action_priors.append((action, policy[i]))
             
-            try:
-                with torch.no_grad():
-                    policy, value = self.network(state_tensor)
-                
-                # Convert to numpy for processing
-                policy = policy[0].numpy()
-                value = value.item()
-                
-                # Create action priors for valid actions
-                action_priors = []
-                for i, valid in enumerate(valid_action_mask):
-                    if valid:
-                        # Convert index back to action
-                        action = self.action_mapper.index_to_action(i, node.game_state)
-                        # Only include actions that are valid in the current state
-                        if action in node.game_state.possible_actions:
-                            action_priors.append((action, policy[i]))
-                
-                # Expand the node with these action priors
-                expansion_count = node.expand(action_priors)
-                if self.debug and expansion_count == 0:
-                    print(f"Warning: Node expanded with 0 children")
+            # Expand the node with these action priors
+            node.expand(action_priors)
             
-            except Exception as e:
-                if self.debug:
-                    print(f"Error in node evaluation: {e}")
-                return False
-            
-        else:
-            # Terminal node
-            value = self._get_game_outcome(node.game_state)
-        
-        # Backpropagation phase
-        self._backpropagate(search_path, value)
-        return True
+            # Backpropagate
+            self._backpropagate(search_path, value)
+        finally:
+            # Always remove virtual loss
+            for n in search_path:
+                n.remove_virtual_loss()
     
     def _backpropagate(self, search_path, value):
         """
@@ -332,12 +407,29 @@ class MCTS:
             search_path: List of nodes in the search path
             value: The value to backpropagate
         """
-        # For multi-player Catan, we need to adjust the value for each player's perspective
+        # Get the perspective of the player at the root node
+        if not search_path:
+            return
+            
+        root_player_idx = search_path[0].game_state.current_player_idx
+        
         for node in reversed(search_path):
-            node.update(value)
-            # Negate the value for opposing players in a zero-sum perspective
-            # For Catan, this might need adjustment for multiple players
-            value = -value
+            # Get the player of the current node
+            node_player_idx = node.game_state.current_player_idx
+            
+            # Adjust value based on player perspective
+            if node_player_idx == root_player_idx:
+                # Same player - use the value directly
+                node_value = value
+            else:
+                # Different player - use a transformed value
+                # For Catan, we use a softer transformation than pure negation
+                # This reflects that in Catan, other players doing well doesn't always
+                # mean you're doing poorly to the same degree
+                node_value = -value * 0.8  # Dampen the negative effect for opponents
+            
+            # Update the node with the perspective-adjusted value
+            node.update(node_value)
     
     def _get_action_probs(self, root):
         """

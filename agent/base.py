@@ -18,9 +18,13 @@ class Agent:
     def is_human(self):
         return self.agent_type == AgentType.HUMAN
     
+    def is_AlphaZero(self):
+        return self.agent_type == AgentType.ALPHAZERO
+    
     def get_action(self, game_state):
         """To be implemented by subclasses"""
         raise NotImplementedError("Subclasses must implement get_action method")
+    
 
 def create_agent(player_id, agent_type):
     """Factory function to create appropriate agent type"""
@@ -34,7 +38,16 @@ def create_agent(player_id, agent_type):
         from agent.simple_heuristic_agent import SimpleHeuristicAgent
         return SimpleHeuristicAgent(player_id)
     elif agent_type == AgentType.ALPHAZERO:
-        from AlphaZero.agent.alpha_agent import create_alpha_agent
-        return create_alpha_agent(player_id)
+        import os
+        model_path = os.environ.get('ALPHAZERO_MODEL_PATH', None)
+        
+        if model_path:
+            # Load a trained model
+            from AlphaZero.utils.alphazero_utils import load_alphazero_agent
+            return load_alphazero_agent(player_id, model_path)
+        else:
+            # Create a new untrained agent for training
+            from AlphaZero.agent.alpha_agent import create_alpha_agent
+            return create_alpha_agent(player_id)
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")

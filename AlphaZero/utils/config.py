@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     # MCTS parameters
     'num_simulations': 100,
     'c_puct': 1.5,
+    'mcts_batch_size': 8,  # Size of batches for MCTS network evaluation
     
     # Game parameters
     'max_moves': 200,

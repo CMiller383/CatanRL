@@ -25,7 +25,7 @@ class AlphaZeroAgent(Agent):
             action_mapper: Converts between game actions and network indices
             mcts: MCTS instance for action selection
         """
-        super().__init__(player_id, AgentType.HEURISTIC)  # Use HEURISTIC as a placeholder
+        super().__init__(player_id, AgentType.ALPHAZERO)  # Use HEURISTIC as a placeholder
         self.network = network
         self.state_encoder = state_encoder
         self.action_mapper = action_mapper
@@ -36,7 +36,7 @@ class AlphaZeroAgent(Agent):
         self.game_history = []
         
         # Debug flag
-        self.debug = False
+        self.debug = True
         self.inactivity_count = 0
     
     def set_training_mode(self, training_mode=True):
@@ -263,16 +263,14 @@ class AlphaZeroAgent(Agent):
         """Clear the recorded game history"""
         self.game_history = []
 
-
-def create_alpha_agent(player_id, state_dim=1000, action_dim=200, hidden_dim=256):
+def create_alpha_agent(player_id, config=None, network=None):
     """
     Factory function to create an AlphaZero agent with initialized components
     
     Args:
         player_id: The player ID
-        state_dim: State dimension for the network
-        action_dim: Action dimension for the network
-        hidden_dim: Hidden dimension for the network
+        config: Configuration dictionary with hyperparameters
+        network: Optional pre-created network to share (used for self-play with same network)
         
     Returns:
         agent: AlphaZeroAgent instance
@@ -283,17 +281,34 @@ def create_alpha_agent(player_id, state_dim=1000, action_dim=200, hidden_dim=256
     from AlphaZero.model.action_mapper import ActionMapper
     from AlphaZero.core.mcts import MCTS
     
-    # Create the network
-    network = CatanNetwork(state_dim, action_dim, hidden_dim)
+    # Use defaults if no config provided
+    if config is None:
+        from AlphaZero.utils.config import get_config
+        config = get_config()
+    
+    # Create or use the provided network
+    if network is None:
+        network = CatanNetwork(
+            state_dim=config.get('state_dim', 992),
+            action_dim=config.get('action_dim', 200),
+            hidden_dim=config.get('hidden_dim', 256)
+        )
     
     # Create the state encoder
-    state_encoder = StateEncoder(max_actions=action_dim)
+    state_encoder = StateEncoder(max_actions=config.get('action_dim', 200))
     
     # Create the action mapper
-    action_mapper = ActionMapper(max_actions=action_dim)
+    action_mapper = ActionMapper(max_actions=config.get('action_dim', 200))
     
-    # Create the MCTS - use a small number of simulations at first for testing
-    mcts = MCTS(network, state_encoder, action_mapper, num_simulations=50, c_puct=2.0)
+    # Create the MCTS with config parameters
+    mcts = MCTS(
+        network=network,
+        state_encoder=state_encoder,
+        action_mapper=action_mapper,
+        num_simulations=config.get('num_simulations', 100),
+        c_puct=config.get('c_puct', 1.5),
+        batch_size=config.get('batch_size', 8)
+    )
     
     # Create and return the agent
     return AlphaZeroAgent(player_id, network, state_encoder, action_mapper, mcts)

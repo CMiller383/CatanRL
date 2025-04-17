@@ -75,14 +75,13 @@ class TrainingPipeline:
             game = GameLogic(board, agent_types=[AgentType.ALPHAZERO] + [AgentType.RANDOM] * 3)
             return game
         
-        # Agent creator function
+        # Agent creator function that uses the shared network and config
         def create_agent(player_id):
             from AlphaZero.agent.alpha_agent import create_alpha_agent
             return create_alpha_agent(
                 player_id=player_id,
-                state_dim=self.config['state_dim'],
-                action_dim=self.config['action_dim'],
-                hidden_dim=self.config['hidden_dim']
+                config=self.config,
+                network=self.network  # Share the same network for self-play
             )
         
         # Create workers
@@ -115,7 +114,7 @@ class TrainingPipeline:
         # Main training loop
         start_time = time.time()
         for iteration in range(self.current_iteration, self.current_iteration + num_iterations):
-            self.log(f"\n=== Iteration {iteration+1}/{self.current_iteration + num_iterations} ===")
+            self.log(f"\n=== Iteration {iteration+1}/{num_iterations} ===")
             iteration_start = time.time()
             
             # Step 1: Self-play to generate data
@@ -316,8 +315,9 @@ class TrainingPipeline:
             # Subplot 2: Performance Metrics
             fig.add_trace(
                 go.Scatter(
-                    x=self.training_metrics['iteration'], 
-                    y=self.training_metrics['win_rate'],
+                    #plot only even iterations
+                    x=[i for i in self.training_metrics['iteration'] if i % 2 == 0],
+                    y=[wr for i, wr in zip(self.training_metrics['iteration'], self.training_metrics['win_rate']) if i % 2 == 0],
                     mode='lines+markers',
                     name='Win Rate'
                 ),
@@ -325,8 +325,9 @@ class TrainingPipeline:
             )
             fig.add_trace(
                 go.Scatter(
-                    x=self.training_metrics['iteration'], 
-                    y=[vp/10 for vp in self.training_metrics['avg_vp']],
+                    #plot only even iterations
+                    x=[i for i in self.training_metrics['iteration'] if i % 2 == 0],
+                    y=[vp for i, vp in zip(self.training_metrics['iteration'], self.training_metrics['avg_vp']) if i % 2 == 0],
                     mode='lines+markers',
                     name='Avg VP / 10'
                 ),
@@ -336,8 +337,9 @@ class TrainingPipeline:
             # Subplot 3: Game Length Metrics
             fig.add_trace(
                 go.Scatter(
-                    x=self.training_metrics['iteration'], 
-                    y=self.training_metrics['avg_game_length'],
+                    #plot only even iterations
+                    x=[i for i in self.training_metrics['iteration'] if i % 2 == 0],
+                    y=[self.training_metrics['avg_game_length'][i] for i in range(len(self.training_metrics['iteration'])) if self.training_metrics['iteration'][i] % 2 == 0],
                     mode='lines+markers',
                     name='Avg Game Length (moves)'
                 ),

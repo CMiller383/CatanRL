@@ -24,21 +24,20 @@ def set_random_seeds(seed=42):
 
 set_random_seeds()
 
-# Configuration for tests
-test_config = {
-    'state_dim': 992,
-    'action_dim': 200,
-    'hidden_dim': 128,
+# Load configuration from the config utility
+from AlphaZero.utils.config import get_config
+test_config = get_config()
+
+# Override config for testing
+test_config.update({
     'num_simulations': 10,  # Small number for testing
-    'self_play_games': 1,  # Just one game for testing
+    'self_play_games': 1,   # Just one game for testing
     'eval_games': 1,
     'epochs': 1,
     'batch_size': 16,
-    'buffer_size': 1000,
-    'max_moves': 50,  # Limit moves for testing
-    'learning_rate': 0.001,
-    'model_dir': 'models'
-}
+    'max_moves': 50,        # Limit moves for testing
+    'mcts_batch_size': 4,   # Smaller batch size for testing
+})
 
 print("=== AlphaZero Catan Component Tests ===")
 
@@ -134,10 +133,19 @@ try:
     # Create root node
     root = MCTSNode(game_state=state)
     
-    # Initialize MCTS
-    mcts = MCTS(network, encoder, action_mapper, num_simulations=test_config['num_simulations'])
+    # Initialize MCTS with the optimized version, including batch processing
+    mcts = MCTS(
+        network=network, 
+        state_encoder=encoder, 
+        action_mapper=action_mapper, 
+        num_simulations=test_config['num_simulations'],
+        batch_size=test_config['mcts_batch_size']
+    )
     
     print("MCTS components initialized successfully")
+    print("Trying a test search...")
+    action_probs, value = mcts.search(state)
+    print(f"Search returned {len(action_probs)} action probabilities and value {value}")
     print("MCTS test passed")
 except Exception as e:
     print(f"MCTS test failed: {e}")
@@ -148,12 +156,11 @@ print("\n--- Test 5: AlphaZero Agent ---")
 try:
     from AlphaZero.agent.alpha_agent import AlphaZeroAgent, create_alpha_agent
     
-    # Create agent
+    # Create agent using the new config-based approach
     agent = create_alpha_agent(
         player_id=0,
-        state_dim=test_config['state_dim'],
-        action_dim=test_config['action_dim'],
-        hidden_dim=test_config['hidden_dim']
+        config=test_config,
+        network=network  # Share the network we already created
     )
     
     print(f"Agent created successfully: {type(agent)}")
@@ -194,15 +201,14 @@ try:
     # Create game factory
     def create_game():
         board = Board()
-        return GameLogic(board, agent_types=[AgentType.RANDOM] * 4)
+        return GameLogic(board, agent_types=[AgentType.ALPHAZERO] * 4)
     
-    # Create agent factory
+    # Create agent factory that uses the shared network and config
     def create_test_agent(player_id):
         return create_alpha_agent(
             player_id=player_id,
-            state_dim=test_config['state_dim'],
-            action_dim=test_config['action_dim'],
-            hidden_dim=test_config['hidden_dim']
+            config=test_config,
+            network=network  # All agents share the same network in self-play
         )
     
     # Create self-play worker
@@ -224,7 +230,7 @@ try:
     from AlphaZero.training.network_trainer import NetworkTrainer
     
     # Create optimizer
-    optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(network.parameters(), lr=test_config['learning_rate'])
     
     # Create trainer
     trainer = NetworkTrainer(network, optimizer, test_config)
@@ -238,6 +244,7 @@ try:
         losses = trainer.train(epochs=1, batch_size=test_config['batch_size'])
         
         print("Training completed successfully")
+        print(f"Training losses: {losses}")
         print("Training test passed")
     else:
         print("No game data available for training, skipping")
@@ -250,7 +257,6 @@ print("\n--- Test 9: Mini Pipeline ---")
 try:
     from AlphaZero.training.training_pipeline import TrainingPipeline
 
-    
     # Create mini pipeline
     mini_config = test_config.copy()
     mini_config['num_iterations'] = 1
@@ -260,9 +266,8 @@ try:
     
     print("Running one iteration...")
     original_generate_games = pipeline.self_play_worker.generate_games
-    original_train = pipeline.trainer.train
-
-    # Create new methods
+    
+    # Create new method for faster testing
     def generate_one_game(n):
         return original_generate_games(1)
 
