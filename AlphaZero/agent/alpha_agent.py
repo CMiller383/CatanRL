@@ -30,13 +30,13 @@ class AlphaZeroAgent(Agent):
         self.state_encoder = state_encoder
         self.action_mapper = action_mapper
         self.mcts = mcts
-        self.training_mode = False  # Whether the agent is in training mode
+        self.training_mode = True  # Whether the agent is in training mode
         
         # Training data collection
         self.game_history = []
         
         # Debug flag
-        self.debug = True
+        self.debug = False
         self.inactivity_count = 0
     
     def set_training_mode(self, training_mode=True):

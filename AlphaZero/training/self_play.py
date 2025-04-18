@@ -1,5 +1,5 @@
 from tqdm import tqdm
-
+from game.game_state import check_game_over
 class SelfPlayWorker:
     """
     Worker that generates self-play games for training
@@ -75,7 +75,6 @@ class SelfPlayWorker:
         return all_game_data
     
     def _is_game_over(self, game_state):
-        from game.game_state import check_game_over
         """Check if the game is over"""
         if game_state.winner is not None:
             return True
@@ -157,5 +156,3 @@ class SelfPlayWorker:
         )
         
         return reward
-    
-

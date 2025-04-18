@@ -1,9 +1,15 @@
-import time 
+import time
 import os
+from datetime import datetime
+import torch
+import psutil
 from AlphaZero.training.self_play import SelfPlayWorker
 from AlphaZero.training.network_trainer import NetworkTrainer
 from AlphaZero.training.evaluator import Evaluator
-import torch
+from AlphaZero.core.network import DeepCatanNetwork
+from game.board import Board
+from game.game_logic import GameLogic
+from agent.base import AgentType
 
 class TrainingPipeline:
     """
@@ -12,11 +18,20 @@ class TrainingPipeline:
     def __init__(self, config=None):
         """
         Initialize the training pipeline
-        
         Args:
             config: Configuration dictionary
         """
-        
+        # Configuration
+        if config is None:
+            from AlphaZero.utils.config import get_config
+            self.config = get_config()
+        else:
+            self.config = config
+
+        # Determine device
+        self.device = torch.device(self.config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu'))
+
+        # Metrics storage
         self.training_metrics = {
             'iteration': [],
             'policy_loss': [],
@@ -27,202 +42,169 @@ class TrainingPipeline:
             'avg_game_length': [],
             'total_moves': []
         }
-        if config is None:
-            from AlphaZero.utils.config import get_config
-            self.config = get_config()
-        else:
-            self.config = config
-        # Current iteration
         self.current_iteration = 0
 
-        # Create log directory
+        # Prepare log and plot directories
         os.makedirs('logs', exist_ok=True)
         os.makedirs('plots', exist_ok=True)
 
-        # Create log file with timestamp
-        from datetime import datetime
+        # Open log file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_file = open(f"logs/training_log_{timestamp}.txt", 'w')
         self.log(f"AlphaZero Catan Training started at {timestamp}")
         self.log(f"Configuration: {self.config}")
 
-        # Create components
+        # Initialize components
         self._init_components()
-    
+
+    def log(self, message):
+        """
+        Log a message to console and file with timestamp, then flush
+        """
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"[{ts}] {message}"
+        print(entry)
+        self.log_file.write(entry + "\n")
+        self.log_file.flush()
+
     def _init_components(self):
         """Initialize network, optimizer, and workers"""
-        from AlphaZero.core.network import CatanNetwork
-        from game.board import Board
-        from game.game_logic import GameLogic
-        from agent.base import AgentType
-        
-        # Create network
-        self.network = CatanNetwork(
+        # Build and move network to device
+        self.network = DeepCatanNetwork(
             state_dim=self.config['state_dim'],
             action_dim=self.config['action_dim'],
             hidden_dim=self.config['hidden_dim']
-        )
-        
-        # Create optimizer
+        ).to(self.device)
+
+        # Optimizer
         self.optimizer = torch.optim.Adam(
             self.network.parameters(),
             lr=self.config['learning_rate']
         )
-        
-        # Game creator function
+
+        # Game creator
         def create_game():
             board = Board()
-            game = GameLogic(board, agent_types=[AgentType.ALPHAZERO] + [AgentType.RANDOM] * 3)
-            return game
-        
-        # Agent creator function that uses the shared network and config
+            return GameLogic(board, agent_types=[AgentType.ALPHAZERO] + [AgentType.RANDOM] * 3)
+
+        # Agent creator
         def create_agent(player_id):
             from AlphaZero.agent.alpha_agent import create_alpha_agent
-            return create_alpha_agent(
+            agent = create_alpha_agent(
                 player_id=player_id,
                 config=self.config,
-                network=self.network  # Share the same network for self-play
+                network=self.network
             )
-        
-        # Create workers
+            agent.network.to(self.device)
+            return agent
+
+        # Workers
         self.self_play_worker = SelfPlayWorker(create_game, create_agent, self.config)
         self.trainer = NetworkTrainer(self.network, self.optimizer, self.config)
-        self.evaluator = Evaluator(create_game, create_agent, self.config)
-        
-        # Create model directory
+        # Pass the pipeline log function into evaluator for consistent logging
+        self.evaluator = Evaluator(create_game, create_agent, self.config, log_fn=self.log)
+
         os.makedirs(self.config['model_dir'], exist_ok=True)
-        
+
     def train(self, num_iterations=None, resume_from=None, testing=False):
         """
         Run the training pipeline for a number of iterations
-        
-        Args:
-            num_iterations: Number of training iterations
-            resume_from: Path to checkpoint to resume from (optional)
         """
-        if num_iterations is None:
-            num_iterations = self.config['num_iterations']
-        
-        # Load checkpoint if specified
+        num_iterations = num_iterations or self.config['num_iterations']
+
+        # Resume checkpoint if provided
         if resume_from:
-            success = self.load_model(resume_from)
-            if not success:
+            if not self.load_model(resume_from):
                 self.log("Starting training from scratch")
             else:
                 self.log(f"Resuming training from iteration {self.current_iteration}")
-        
-        # Main training loop
+
         start_time = time.time()
-        for iteration in range(self.current_iteration, self.current_iteration + num_iterations):
-            self.log(f"\n=== Iteration {iteration+1}/{num_iterations} ===")
-            iteration_start = time.time()
-            
-            # Step 1: Self-play to generate data
-            self.log("Starting self-play...")
-            self_play_start = time.time()
-            game_data = self.self_play_worker.generate_games(self.config['self_play_games'])
-            self.trainer.add_game_data(game_data)
-            self_play_time = time.time() - self_play_start
-            self.log(f"Self-play completed in {self_play_time:.2f}s")
-            self.log(f"Generated {len(game_data)} training examples")
-            
-            # Step 2: Train network
-            self.log("Training network...")
-            train_start = time.time()
-            loss_metrics = self.trainer.train(
-                epochs=self.config['epochs'],
-                batch_size=self.config['batch_size']
-            )
-            train_time = time.time() - train_start
+        try:
+            for iteration in range(self.current_iteration, self.current_iteration + num_iterations):
+                self.log(f"\n=== Iteration {iteration+1}/{num_iterations} ===")
+                iter_start = time.time()
 
-            # Extract training metrics directly from the returned dictionary
-            train_metrics = {
-                'total_loss': loss_metrics.get('total_loss', 0),
-                'value_loss': loss_metrics.get('value_loss', 0),
-                'policy_loss': loss_metrics.get('policy_loss', 0),
-            }
-            
-            eval_metrics = {'win_rate': 0, 'avg_vp': 0, 'avg_game_length': 0}
-            #update to every 2 or so iterations leave comment so I can change for testing
-            if (iteration + 1) % 2 == 0:
-                self.log("Evaluating network...")
-                eval_start = time.time()
-                eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
-                eval_time = time.time() - eval_start
-                self._save_eval_results(eval_metrics, iteration + 1)
-                self.log(f"Evaluation completed in {eval_time:.2f}s")
+                # 1. Self-play
+                self.log("Starting self-play...")
+                sp_start = time.time()
+                game_data = self.self_play_worker.generate_games(self.config['self_play_games'])
+                self.trainer.add_game_data(game_data)
+                sp_time = time.time() - sp_start
+                rate = len(game_data) / sp_time if sp_time > 0 else 0
+                self.log(f"Self-play completed in {sp_time:.2f}s, generated {len(game_data)} examples ({rate:.1f} games/s)")
 
+                # 2. Training
+                self.log("Training network...")
+                tr_start = time.time()
+                metrics = self.trainer.train(epochs=self.config['epochs'], batch_size=self.config['batch_size'])
+                self.log(f"Training completed in {time.time() - tr_start:.2f}s")
 
-            # self.log("Evaluating network...")
-            # eval_start = time.time()
-            # eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
-            # eval_time = time.time() - eval_start
-            
-            # self._save_eval_results(eval_metrics, iteration + 1)
-            # self.log(f"Evaluation completed in {eval_time:.2f}s")
-            
-            # Step 4: Update and save metrics
-            self.update_metrics(iteration + 1, train_metrics, eval_metrics)
-            if (iteration + 1) % 5 == 0:
-                self.plot_metrics()
-            
-            # Step 5: Save model
-            is_best = False
-            if eval_metrics['win_rate'] >= 0.75:  # If win rate is good
-                is_best = True
-                self.log(f"New best model with win rate {eval_metrics['win_rate']:.2f}!")
-            
-            if (iteration + 1) % 5 == 0 or is_best:  # Save every 5 iterations or if best
-                self.save_model(iteration + 1, is_best)
-            
-            
-            # Log iteration summary
-            iteration_time = time.time() - iteration_start
-            self.log(f"Iteration {iteration+1} completed in {iteration_time:.2f}s")
-            
-            # Update current iteration
-            self.current_iteration = iteration + 1
-        
-        # Training completed
-        total_time = time.time() - start_time
-        self.log(f"\n=== Training Completed ===")
-        self.log(f"Total time: {total_time:.2f}s ({total_time/3600:.2f}h)")
-        
-        # Save final model and plots
-        if not testing:
+                # 3. Evaluation every 2 iters
+                eval_metrics = {'win_rate': 0, 'avg_vp': 0, 'avg_game_length': 0}
+                if (iteration + 1) % 2 == 0:
+                    self.network.eval()
+                    self.log("Evaluating network...")
+                    ev_start = time.time()
+                    eval_metrics = self.evaluator.evaluate(self.config['eval_games'])
+                    self.log(f"Evaluation completed in {time.time() - ev_start:.2f}s")
+                    self.network.train()
+
+                # 4. Metrics and plotting
+                self.update_metrics(iteration+1, metrics, eval_metrics)
+                if (iteration + 1) % 5 == 0:
+                    self.plot_metrics()
+
+                # 5. Checkpointing
+                is_best = eval_metrics['win_rate'] >= 0.75
+                if is_best:
+                    self.log(f"New best model at iteration {iteration+1} (win_rate={eval_metrics['win_rate']:.2f})")
+                if (iteration + 1) % 5 == 0 or is_best:
+                    self.save_model(iteration+1, is_best)
+
+                # Log iteration duration and resource usage
+                iter_time = time.time() - iter_start
+                self.log(f"Iteration {iteration+1} done in {iter_time:.2f}s")
+                # System resource logging
+                cpu = psutil.cpu_percent()
+                ram = psutil.virtual_memory().percent
+                if torch.cuda.is_available():
+                    gpu_mem = torch.cuda.max_memory_allocated() / 1e9
+                    torch.cuda.reset_peak_memory_stats()
+                    self.log(f"Resource usage: CPU {cpu:.1f}%, RAM {ram:.1f}%, GPU peak memory {gpu_mem:.2f} GB")
+                else:
+                    self.log(f"Resource usage: CPU {cpu:.1f}%, RAM {ram:.1f}%")
+
+                self.current_iteration = iteration + 1
+
+        except KeyboardInterrupt:
+            self.log("Training interrupted by user; saving current model...")
             self.save_model(self.current_iteration)
-            self.plot_metrics()
-        # Close log file
-        self.log_file.close()
-    
+        finally:
+            total = time.time() - start_time
+            self.log(f"\n=== Training Finished ({total:.2f}s / {total/3600:.2f}h) ===")
+            if not testing:
+                self.save_model(self.current_iteration)
+                self.plot_metrics()
+            self.log_file.close()
+
     def save_model(self, iteration, is_best=False):
         """Save a model checkpoint"""
-        checkpoint_name = f"model_iter_{iteration}.pt"
-        checkpoint_path = os.path.join(self.config['model_dir'], checkpoint_name)
-        
-        # Save model, optimizer, and configuration
-        torch.save({
+        ckpt = {
             'iteration': iteration,
             'network_state_dict': self.network.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'config': self.config,
             'metrics': self.training_metrics
-        }, checkpoint_path)
-        
-        self.log(f"Checkpoint saved to {checkpoint_path}")
-        
-        # If this is the best model, create a copy
+        }
+        path = os.path.join(self.config['model_dir'], f"model_iter_{iteration}.pt")
+        torch.save(ckpt, path)
+        self.log(f"Checkpoint saved: {path}")
         if is_best:
             best_path = os.path.join(self.config['model_dir'], "best_model.pt")
-            torch.save({
-                'iteration': iteration,
-                'network_state_dict': self.network.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'config': self.config,
-                'metrics': self.training_metrics
-            }, best_path)
-            self.log(f"Best model saved to {best_path}")
-    
+            torch.save(ckpt, best_path)
+            self.log(f"Best model saved: {best_path}")
+
     def load_model(self, path):
         """Load a model checkpoint"""
         if not os.path.exists(path):
@@ -391,11 +373,6 @@ class TrainingPipeline:
         with open(path, 'w') as f:
             json.dump(results, f, indent=4)
 
-    def log(self, message):
-        """Write a message to the log file and print it"""
-        print(message)
-        self.log_file.write(f"{message}\n")
-        self.log_file.flush()
 
     def update_metrics(self, iteration, train_metrics, eval_metrics):
         self.training_metrics['iteration'].append(iteration)

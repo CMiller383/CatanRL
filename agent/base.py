@@ -26,7 +26,7 @@ class Agent:
         raise NotImplementedError("Subclasses must implement get_action method")
     
 
-def create_agent(player_id, agent_type):
+def create_agent(player_id, agent_type, model_path=None):
     """Factory function to create appropriate agent type"""
     if agent_type == AgentType.HUMAN:
         from agent.human_agent import HumanAgent
@@ -39,8 +39,6 @@ def create_agent(player_id, agent_type):
         return SimpleHeuristicAgent(player_id)
     elif agent_type == AgentType.ALPHAZERO:
         import os
-        model_path = os.environ.get('ALPHAZERO_MODEL_PATH', None)
-        
         if model_path:
             # Load a trained model
             from AlphaZero.utils.alphazero_utils import load_alphazero_agent

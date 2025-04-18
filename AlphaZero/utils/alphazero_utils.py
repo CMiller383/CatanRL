@@ -1,5 +1,5 @@
 import torch
-from AlphaZero.core.network import CatanNetwork
+from AlphaZero.core.network import DeepCatanNetwork
 from AlphaZero.model.state_encoder import StateEncoder
 from AlphaZero.model.action_mapper import ActionMapper
 from AlphaZero.core.mcts import MCTS
@@ -34,7 +34,11 @@ def load_alphazero_agent(player_id, model_path="models/best_model.pt", config=No
         num_simulations = config.get('num_simulations', 100)
         
         # Create network and load the trained weights
-        network = CatanNetwork(state_dim, action_dim, hidden_dim)
+        network = DeepCatanNetwork(
+            state_dim=state_dim,
+            action_dim=action_dim,
+            hidden_dim=hidden_dim
+        )
         network.load_state_dict(checkpoint['network_state_dict'])
         network.eval()  # Set to evaluation mode
         
@@ -49,7 +53,7 @@ def load_alphazero_agent(player_id, model_path="models/best_model.pt", config=No
         agent = AlphaZeroAgent(player_id, network, state_encoder, action_mapper, mcts)
         agent.set_training_mode(False)  # Make sure training mode is off
         
-        print(f"Successfully loaded AlphaZero agent from {model_path}")
+        # print(f"Successfully loaded AlphaZero agent from {model_path}")
         return agent
     
     except Exception as e:

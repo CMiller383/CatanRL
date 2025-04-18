@@ -44,10 +44,10 @@ print("=== AlphaZero Catan Component Tests ===")
 # Test 1: Neural Network
 print("\n--- Test 1: Neural Network ---")
 try:
-    from AlphaZero.core.network import CatanNetwork
+    from AlphaZero.core.network import DeepCatanNetwork
     
     # Create network
-    network = CatanNetwork(
+    network = DeepCatanNetwork(
         state_dim=test_config['state_dim'],
         action_dim=test_config['action_dim'],
         hidden_dim=test_config['hidden_dim']
