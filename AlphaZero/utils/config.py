@@ -3,7 +3,6 @@ DEFAULT_CONFIG = {
     'state_dim': 992,
     'action_dim': 200,
     'hidden_dim': 256,
-    'use_deep_network': False,
     
     # Training parameters
     'learning_rate': 0.001,

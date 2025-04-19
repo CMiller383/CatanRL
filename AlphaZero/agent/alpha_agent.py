@@ -117,7 +117,64 @@ class AlphaZeroAgent(Agent):
         if self.debug:
             print("Warning: No valid initial roads found!")
         return None
-    
+    def improved_action_selection(self, action_probs, mcts_root=None):
+        """
+        Select an action based on MCTS results with configurable selection method
+        
+        Args:
+            action_probs: Dictionary mapping actions to probabilities
+            mcts_root: Root node of the MCTS search tree (if available)
+            
+        Returns:
+            The selected action
+        """
+        # Check if we should use deterministic selection (using visit counts)
+        if hasattr(self, 'deterministic') and self.deterministic and mcts_root and mcts_root.children:
+            # Select action with highest visit count
+            action = max(mcts_root.children.items(), key=lambda x: x[1].visit_count)[0]
+            if self.debug:
+                print(f"Using deterministic selection (highest visit count): {action}")
+            return action
+        
+        # Otherwise use temperature-based selection
+        if self.training_mode and random.random() < 0.1:
+            # Occasionally explore random actions during training
+            action = random.choice(list(self.game_state.possible_actions))
+            if self.debug:
+                print(f"Exploration mode: randomly selected {action}")
+        else:
+            # Choose action based on probability distribution and temperature
+            if action_probs:
+                if hasattr(self, 'temperature') and self.temperature > 0:
+                    # Temperature-based sampling
+                    actions = list(action_probs.keys())
+                    probs = np.array([action_probs[a] for a in actions])
+                    
+                    # Apply temperature
+                    if self.temperature != 1.0:
+                        probs = probs ** (1.0 / self.temperature)
+                        probs = probs / np.sum(probs)
+                    
+                    # Sample from the distribution
+                    idx = np.random.choice(len(actions), p=probs)
+                    action = actions[idx]
+                    
+                    if self.debug:
+                        print(f"Selected {action} using temperature {self.temperature}")
+                else:
+                    # Greedy selection (equivalent to temperature → 0)
+                    action = max(action_probs.items(), key=lambda x: x[1])[0]
+                    if self.debug:
+                        print(f"Selected {action} (greedy)")
+            else:
+                # Fallback to random action if MCTS failed
+                if self.debug:
+                    print("Warning: MCTS returned no action probs, falling back to random")
+                action = random.choice(list(self.game_state.possible_actions))
+                # Increment inactivity counter
+                self.inactivity_count += 1
+        
+        return action
     def get_action(self, state):
         """
         Get an action for the current game state
@@ -174,6 +231,10 @@ class AlphaZeroAgent(Agent):
         try:
             # Use MCTS to find the best action
             action_probs, value_estimate = self.mcts.search(state)
+            mcts_root = None
+            if hasattr(self.mcts, 'root'):
+                mcts_root = self.mcts.root
+            action = self.improved_action_selection(action_probs, mcts_root)
             
             if self.debug:
                 print(f"MCTS value estimate: {value_estimate:.4f}")
@@ -194,37 +255,37 @@ class AlphaZeroAgent(Agent):
                     'reward': None  # To be filled in later
                 })
             
-            # Select the action based on the policy
-            if self.training_mode and random.random() < 0.1:
-                # Occasionally explore random actions during training
-                action = random.choice(list(state.possible_actions))
-                if self.debug:
-                    print(f"Exploration mode: randomly selected {action}")
-            else:
-                # Choose the action with the highest probability
-                if action_probs:
-                    action = max(action_probs.items(), key=lambda x: x[1])[0]
-                    if self.debug:
-                        print(f"AlphaZero chose action: {action}")
-                else:
-                    # Fallback to random action if MCTS failed
-                    if self.debug:
-                        print("Warning: MCTS returned no action probs, falling back to random")
-                    action = random.choice(list(state.possible_actions))
-                    # Increment inactivity counter
-                    self.inactivity_count += 1
+            # # Select the action based on the policy
+            # if self.training_mode and random.random() < 0.1:
+            #     # Occasionally explore random actions during training
+            #     action = random.choice(list(state.possible_actions))
+            #     if self.debug:
+            #         print(f"Exploration mode: randomly selected {action}")
+            # else:
+            #     # Choose the action with the highest probability
+            #     if action_probs:
+            #         action = max(action_probs.items(), key=lambda x: x[1])[0]
+            #         if self.debug:
+            #             print(f"AlphaZero chose action: {action}")
+            #     else:
+            #         # Fallback to random action if MCTS failed
+            #         if self.debug:
+            #             print("Warning: MCTS returned no action probs, falling back to random")
+            #         action = random.choice(list(state.possible_actions))
+            #         # Increment inactivity counter
+            #         self.inactivity_count += 1
             
-            # Verify the action is in possible_actions
-            if action not in state.possible_actions:
-                if self.debug:
-                    print(f"Warning: Selected action {action} not in possible_actions!")
-                    action_type_matches = [a for a in state.possible_actions if a.type == action.type]
-                    if action_type_matches:
-                        print(f"Found {len(action_type_matches)} actions with same type. Using first one.")
-                        action = action_type_matches[0]
-                    else:
-                        print("No action with matching type found. Using random action.")
-                        action = random.choice(list(state.possible_actions))
+            # # Verify the action is in possible_actions
+            # if action not in state.possible_actions:
+            #     if self.debug:
+            #         print(f"Warning: Selected action {action} not in possible_actions!")
+            #         action_type_matches = [a for a in state.possible_actions if a.type == action.type]
+            #         if action_type_matches:
+            #             print(f"Found {len(action_type_matches)} actions with same type. Using first one.")
+            #             action = action_type_matches[0]
+            #         else:
+            #             print("No action with matching type found. Using random action.")
+            #             action = random.choice(list(state.possible_actions))
             
             return action
             
@@ -276,7 +337,6 @@ def create_alpha_agent(player_id, config=None, network=None):
         agent: AlphaZeroAgent instance
     """
     # Import required components
-    from AlphaZero.core.network import CatanNetwork
     from AlphaZero.model.state_encoder import StateEncoder
     from AlphaZero.model.action_mapper import ActionMapper
     from AlphaZero.core.mcts import MCTS
@@ -286,13 +346,6 @@ def create_alpha_agent(player_id, config=None, network=None):
         from AlphaZero.utils.config import get_config
         config = get_config()
     
-    # Create or use the provided network
-    if network is None:
-        network = CatanNetwork(
-            state_dim=config.get('state_dim', 992),
-            action_dim=config.get('action_dim', 200),
-            hidden_dim=config.get('hidden_dim', 256)
-        )
     
     # Create the state encoder
     state_encoder = StateEncoder(max_actions=config.get('action_dim', 200))

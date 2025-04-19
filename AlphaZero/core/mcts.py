@@ -227,6 +227,7 @@ class MCTS:
         # Create the root node
         start_time = time.time()
         root = MCTSNode(game_state=copy.deepcopy(game_state))
+        self.root = root
         
         # First, evaluate the root state
         state_tensor = self.state_encoder.encode_state(game_state)
