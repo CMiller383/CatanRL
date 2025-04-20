@@ -69,7 +69,7 @@ class SelfPlayWorker:
             
             # Log game results
             winner = self._get_winner(game.state)
-            print(f"Game {game_idx+1}: Player {winner} won with "
+            print(f"\nGame {game_idx+1}: Player {winner} won with "
                 f"{game.state.players[winner].victory_points} VP")
         
         return all_game_data

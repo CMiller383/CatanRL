@@ -8,7 +8,8 @@ from agent.base import Agent, AgentType
 from game.setup import is_valid_initial_settlement
 from game.rules import is_valid_initial_road
 from game.action import Action
-from game.enums import ActionType
+from game.enums import ActionType, Resource
+from game.enums import GamePhase
 
 class AlphaZeroAgent(Agent):
     """
@@ -47,77 +48,139 @@ class AlphaZeroAgent(Agent):
             # Clear game history when not in training mode
             self.game_history = []
     
+    def _score_spot(self, state, spot_id):
+        """
+        Heuristic score for placing a settlement on spot_id, now with port logic.
+        In SETUP_PHASE_2, this also biases toward resources you lack.
+        """
+        pip = {2:1,3:2,4:3,5:4,6:5,8:5,9:4,10:3,11:2,12:1}
+        # base weight per resource
+        res_w = {
+            Resource.WHEAT: 1.5,
+            Resource.BRICK: 1.3,
+            Resource.WOOD: 1.2,
+            Resource.ORE:   1.2,
+            Resource.SHEEP: 1.0
+        }
+        diversity_bonus   = 2
+        duplicate_penalty = 1
+        port_bonus        = 3
+
+        spot = state.board.spots[spot_id]
+        nums, ress = [], []
+        for hid in spot.adjacent_hex_ids:
+            h = state.board.get_hex(hid)
+            if h.number > 0:
+                nums.append(h.number)
+                ress.append(h.resource)
+
+        player_inv = {}
+        if state.current_phase == GamePhase.SETUP_PHASE_2:
+            player = state.get_current_player()
+            player_inv = player.resources  # Resource → count
+
+        score = 0.0
+        # 1) pip × base weight, scaled in phase 2 by 1/(1 + have_of_that_resource)
+        for n, r in zip(nums, ress):
+            base = pip[n] * res_w.get(r, 1.0)
+            if player_inv:
+                score += base / (1 + player_inv.get(r, 0))
+            else:
+                score += base
+
+        # 2) diversity bonus
+        uniq = set(ress)
+        score += diversity_bonus * len(uniq)
+
+        # 3) duplicate penalty
+        score -= duplicate_penalty * (len(ress) - len(uniq))
+
+        # 4) expansion potential: count valid initial roads off this spot
+        valid_roads = 0
+        for rid, road in state.board.roads.items():
+            if (road.spot1_id == spot_id or road.spot2_id == spot_id) \
+               and is_valid_initial_road(state, rid, spot_id):
+                valid_roads += 1
+        score += valid_roads
+
+        # 5) port bonus
+        if spot.has_port:
+            score += port_bonus
+
+        return score
+
     def get_initial_settlement(self, state):
-        """
-        Choose a spot for initial settlement placement
-        In early development, we'll use a heuristic approach for setup
-        
-        Args:
-            state: The game state
-            
-        Returns:
-            spot_id: ID of the selected spot
-        """
-        # For simplicity, we'll use a heuristic for initial placement
-        # Mapping from dice number to pip count (probability)
-        pip_values = {2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1}
-        
-        best_spot = None
-        best_score = -1
-        
-        for spot_id, spot in state.board.spots.items():
-            if is_valid_initial_settlement(state, spot_id):
-                # Calculate a score based on resource diversity and probability
-                score = 0
-                resources = set()
-                
-                for hex_id in spot.adjacent_hex_ids:
-                    hex_obj = state.board.get_hex(hex_id)
-                    resources.add(hex_obj.resource)
-                    
-                    # Add score based on dice probability
-                    if hex_obj.number > 0:  # Skip desert
-                        score += pip_values.get(hex_obj.number, 0)
-                
-                # Bonus for resource diversity
-                score += len(resources) * 2
-                
-                if score > best_score:
-                    best_score = score
-                    best_spot = spot_id
-        
-        if self.debug:
-            print(f"AlphaZero chose initial settlement: {best_spot}")
-        
-        return best_spot
-    
-    def get_initial_road(self, state, settlement_id):
-        """
-        Choose a road connected to the initial settlement
-        
-        Args:
-            state: The game state
-            settlement_id: ID of the settlement to connect to
-            
-        Returns:
-            road_id: ID of the selected road
-        """
-        valid_roads = []
-        
-        for road_id, road in state.board.roads.items():
-            if is_valid_initial_road(state, road_id, settlement_id):
-                valid_roads.append(road_id)
-        
-        if valid_roads:
-            # For now, just choose randomly
-            road_id = random.choice(valid_roads)
+        """Phase‑aware two‑spot lookahead in SETUP_PHASE_1, single‑spot in PHASE_2."""
+        alpha = 0.8  # how much to discount your second spot
+
+        # Phase 2: simple best‐spot fill‑gaps heuristic
+        if state.current_phase == GamePhase.SETUP_PHASE_2:
+            best, best_s = None, -float('inf')
+            for sid, spot in state.board.spots.items():
+                if not is_valid_initial_settlement(state, sid):
+                    continue
+                s = self._score_spot(state, sid)
+                if s > best_s:
+                    best_s, best = s, sid
             if self.debug:
-                print(f"AlphaZero chose initial road: {road_id}")
-            return road_id
-        
+                print(f"[Phase 2] Chose settlement {best} (score {best_s:.1f})")
+            return best
+
+        # Phase 1: two‑spot lookahead
+        bestA, best_val = None, -float('inf')
+        me = self.player_id
+
+        for A, spotA in state.board.spots.items():
+            if not is_valid_initial_settlement(state, A):
+                continue
+
+            sA = self._score_spot(state, A)
+
+            # pretend we’ve taken A
+            spotA.player_idx = me
+            # collect valid second spots
+            candidates = [
+                B for B, sp in state.board.spots.items()
+                if is_valid_initial_settlement(state, B)
+            ]
+            sB = max((self._score_spot(state, B) for B in candidates), default=0.0)
+            # undo
+            spotA.player_idx = None
+
+            total = sA + alpha * sB
+            if total > best_val:
+                best_val, bestA = total, A
+
         if self.debug:
-            print("Warning: No valid initial roads found!")
-        return None
+            print(f"[Phase 1] Chose settlement {bestA} (A + α·B = {best_val:.1f})")
+        return bestA
+
+    def get_initial_road(self, state, settlement_id):
+        best_road, best_score = None, -float('inf')
+        for road_id, road in state.board.roads.items():
+            if not is_valid_initial_road(state, road_id, settlement_id):
+                continue
+
+            a, b = road.spot1_id, road.spot2_id
+            next_spot = b if a == settlement_id else a
+
+            s = self._score_spot(state, next_spot)
+            if s > best_score:
+                best_score, best_road = s, road_id
+
+        if best_road is None:
+            if self.debug:
+                print("Warning: no valid initial road found, falling back to random")
+            candidates = [
+                rid for rid in state.board.roads
+                if is_valid_initial_road(state, rid, settlement_id)
+            ]
+            return random.choice(candidates) if candidates else None
+
+        if self.debug:
+            print(f"AlphaZero initial road → road {best_road}  (leads to spot score={best_score:.1f})")
+        return best_road
+
     def improved_action_selection(self, action_probs, mcts_root=None):
         """
         Select an action based on MCTS results with configurable selection method
@@ -255,39 +318,6 @@ class AlphaZeroAgent(Agent):
                     'value': value_estimate,
                     'reward': None  # To be filled in later
                 })
-            
-            # # Select the action based on the policy
-            # if self.training_mode and random.random() < 0.1:
-            #     # Occasionally explore random actions during training
-            #     action = random.choice(list(state.possible_actions))
-            #     if self.debug:
-            #         print(f"Exploration mode: randomly selected {action}")
-            # else:
-            #     # Choose the action with the highest probability
-            #     if action_probs:
-            #         action = max(action_probs.items(), key=lambda x: x[1])[0]
-            #         if self.debug:
-            #             print(f"AlphaZero chose action: {action}")
-            #     else:
-            #         # Fallback to random action if MCTS failed
-            #         if self.debug:
-            #             print("Warning: MCTS returned no action probs, falling back to random")
-            #         action = random.choice(list(state.possible_actions))
-            #         # Increment inactivity counter
-            #         self.inactivity_count += 1
-            
-            # # Verify the action is in possible_actions
-            # if action not in state.possible_actions:
-            #     if self.debug:
-            #         print(f"Warning: Selected action {action} not in possible_actions!")
-            #         action_type_matches = [a for a in state.possible_actions if a.type == action.type]
-            #         if action_type_matches:
-            #             print(f"Found {len(action_type_matches)} actions with same type. Using first one.")
-            #             action = action_type_matches[0]
-            #         else:
-            #             print("No action with matching type found. Using random action.")
-            #             action = random.choice(list(state.possible_actions))
-            
             return action
             
         except Exception as e:
