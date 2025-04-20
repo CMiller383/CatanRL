@@ -232,6 +232,7 @@ class MCTS:
         # First, evaluate the root state
         state_tensor = self.state_encoder.encode_state(game_state)
         valid_action_mask = self.state_encoder.get_valid_action_mask(game_state)
+        # print(f"→ valid_action_mask has {valid_action_mask.sum()} Trues out of {len(valid_action_mask)} slots")
         if hasattr(self.network, 'parameters'):
           device_str = str(next(self.network.parameters()).device)
         if self.debug:
@@ -256,7 +257,7 @@ class MCTS:
               policy, value = self.network(state_tensor.unsqueeze(0))
                 
             # Convert to numpy for processing
-            policy = policy[0].numpy()  # Remove batch dimension
+            policy = policy[0].detach().cpu().numpy()
             
             # Create action priors for valid actions
             action_priors = []
@@ -324,7 +325,7 @@ class MCTS:
                             for i, (eval_node, eval_path) in enumerate(nodes_pending_evaluation):
                                 try:
                                     # Complete the evaluation with the network results
-                                    policy = batch_policies[i].numpy()
+                                    policy = batch_policies[i].detach().cpu().numpy()
                                     value = batch_values[i].item()
                                     
                                     # Process the evaluation

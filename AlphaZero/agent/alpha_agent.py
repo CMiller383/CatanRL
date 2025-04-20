@@ -295,6 +295,9 @@ class AlphaZeroAgent(Agent):
         try:
             # Use MCTS to find the best action
             action_probs, value_estimate = self.mcts.search(state)
+            if self.debug:
+              print("❯❯❯ MCTS returned", len(action_probs), "actions with total mass",
+                    sum(action_probs.values()), action_probs)
             mcts_root = None
             if hasattr(self.mcts, 'root'):
                 mcts_root = self.mcts.root
@@ -309,6 +312,8 @@ class AlphaZeroAgent(Agent):
                         print(f"  {i+1}. {act} with probability {prob:.4f}")
             
             # Record state and policy for training
+
+
             if self.training_mode:
                 state_tensor = self.state_encoder.encode_state(state)
                 # print(state_tensor)
