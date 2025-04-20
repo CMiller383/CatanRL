@@ -232,11 +232,28 @@ class MCTS:
         # First, evaluate the root state
         state_tensor = self.state_encoder.encode_state(game_state)
         valid_action_mask = self.state_encoder.get_valid_action_mask(game_state)
+        if hasattr(self.network, 'parameters'):
+          device_str = str(next(self.network.parameters()).device)
+        if self.debug:
+            print(f"MCTS using network on device: {device_str}")
         
+        # Ensure we're on CUDA if available
+        if torch.cuda.is_available() and not device_str.startswith('cuda'):
+            if self.debug:
+                print(f"Moving network to CUDA during search")
+            self.network = self.network.to('cuda')
         try:
             # Get policy and value from the network
             with torch.no_grad():
-                policy, value = self.network(torch.FloatTensor(state_tensor).unsqueeze(0))
+              # Convert to tensor
+              state_tensor = torch.FloatTensor(state_tensor)
+              
+              # Move to same device as network
+              if hasattr(self.network, 'parameters'):
+                  device = next(self.network.parameters()).device
+                  state_tensor = state_tensor.to(device)
+              
+              policy, value = self.network(state_tensor.unsqueeze(0))
                 
             # Convert to numpy for processing
             policy = policy[0].numpy()  # Remove batch dimension
@@ -296,6 +313,10 @@ class MCTS:
                             # Convert list of arrays to a single numpy array first (fixes warning)
                             states_np_array = np.array(states_to_evaluate, dtype=np.float32)
                             batch_tensor = torch.FloatTensor(states_np_array)
+                            if hasattr(self.network, 'parameters'):
+                                device = next(self.network.parameters()).device
+                                batch_tensor = batch_tensor.to(device)
+
                             with torch.no_grad():
                                 batch_policies, batch_values = self.network(batch_tensor)
                             

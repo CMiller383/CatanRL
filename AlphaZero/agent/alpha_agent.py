@@ -181,7 +181,7 @@ class AlphaZeroAgent(Agent):
             print(f"AlphaZero initial road → road {best_road}  (leads to spot score={best_score:.1f})")
         return best_road
 
-    def improved_action_selection(self, action_probs, mcts_root=None):
+    def improved_action_selection(self, action_probs, state, mcts_root=None):
         """
         Select an action based on MCTS results with configurable selection method
         
@@ -203,7 +203,7 @@ class AlphaZeroAgent(Agent):
         # Otherwise use temperature-based selection
         if self.training_mode and random.random() < 0.1:
             # Occasionally explore random actions during training
-            action = random.choice(list(self.game_state.possible_actions))
+            action = random.choice(list(state.possible_actions))
             if self.debug:
                 print(f"Exploration mode: randomly selected {action}")
         else:
@@ -234,7 +234,7 @@ class AlphaZeroAgent(Agent):
                 # Fallback to random action if MCTS failed
                 if self.debug:
                     print("Warning: MCTS returned no action probs, falling back to random")
-                action = random.choice(list(self.game_state.possible_actions))
+                action = random.choice(list(state.possible_actions))
                 # Increment inactivity counter
                 self.inactivity_count += 1
         
@@ -298,7 +298,7 @@ class AlphaZeroAgent(Agent):
             mcts_root = None
             if hasattr(self.mcts, 'root'):
                 mcts_root = self.mcts.root
-            action = self.improved_action_selection(action_probs, mcts_root)
+            action = self.improved_action_selection(action_probs, state, mcts_root)
             
             if self.debug:
                 print(f"MCTS value estimate: {value_estimate:.4f}")
@@ -311,6 +311,7 @@ class AlphaZeroAgent(Agent):
             # Record state and policy for training
             if self.training_mode:
                 state_tensor = self.state_encoder.encode_state(state)
+                # print(state_tensor)
                 self.game_history.append({
                     'state': state_tensor,
                     'player': state.current_player_idx,

@@ -54,7 +54,6 @@ class SelfPlayWorker:
             
             # Calculate rewards for all agents
             winner = self._get_winner(game.state)
-            
             # Collect game data from all agents
             for player_idx, agent in enumerate(game.agents):
                 # Calculate reward for this player
@@ -62,8 +61,8 @@ class SelfPlayWorker:
                 
                 # Record final reward in agent's game history
                 agent.record_game_result(reward)
-                
                 # Get and add game history data
+                
                 game_data = agent.get_game_history()
                 all_game_data.extend(game_data)
             
