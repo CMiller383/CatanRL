@@ -31,6 +31,7 @@ class AlphaZeroAgent(Agent):
         self.action_mapper = action_mapper
         self.mcts = mcts
         self.training_mode = True  # Whether the agent is in training mode
+        self.temperature = 1.0  # Temperature for action selection
         
         # Training data collection
         self.game_history = []
@@ -345,7 +346,7 @@ def create_alpha_agent(player_id, config=None, network=None):
     if config is None:
         from AlphaZero.utils.config import get_config
         config = get_config()
-    
+        
     
     # Create the state encoder
     state_encoder = StateEncoder(max_actions=config.get('action_dim', 200))
@@ -364,4 +365,9 @@ def create_alpha_agent(player_id, config=None, network=None):
     )
     
     # Create and return the agent
-    return AlphaZeroAgent(player_id, network, state_encoder, action_mapper, mcts)
+    agent = AlphaZeroAgent(player_id, network, state_encoder, action_mapper, mcts)
+    if agent.training_mode:
+        agent.temperature = config.get('temperature', 1.0)  # Set temperature for exploration
+    else:
+        agent.temperature = 0.5  # Set a lower temperature for evaluation
+    return agent 
