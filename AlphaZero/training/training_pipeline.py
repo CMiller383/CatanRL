@@ -17,7 +17,7 @@ import functools
 from multiprocessing import get_context, cpu_count
 import multiprocessing
 from copy import deepcopy
-
+import pickle
 
 #for pickle reasons
 def top_level_create_game():
@@ -255,8 +255,6 @@ class TrainingPipeline:
       
       # Save only the latest replay buffer
       try:
-          import pickle
-          import os
           
           # Use a fixed path for the latest buffer
           buffer_path = os.path.join(self.config['model_dir'], "latest_buffer.pkl")
