@@ -117,7 +117,7 @@ class TrainingPipeline:
         )
 
         # 4) Fork a Pool *once*
-        pool_size = min(4, self.config['self_play_games'])
+        pool_size = min(cpu_count()-1, self.config['self_play_games'])
         self.self_play_pool = multiprocessing.Pool(processes=pool_size)
 
         # 5) Instantiate the worker with creators and the pool
@@ -185,7 +185,7 @@ class TrainingPipeline:
 
                 # 3. Evaluation every 2 iters
                 eval_metrics = {'win_rate': 0, 'avg_vp': 0, 'avg_game_length': 0}
-                if (iteration + 1) % 2 == 0:
+                if (iteration + 1) % 5 == 0:
                     self.network.eval()
                     self.log("Evaluating network...")
                     ev_start = time.time()
@@ -235,53 +235,113 @@ class TrainingPipeline:
                 self.self_play_pool.join()
 
     def save_model(self, iteration, is_best=False):
-        """Save a model checkpoint"""
-        ckpt = {
-            'iteration': iteration,
-            'network_state_dict': self.network.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'config': self.config,
-            'metrics': self.training_metrics
-        }
-        path = os.path.join(self.config['model_dir'], f"model_iter_{iteration}.pt")
-        torch.save(ckpt, path)
-        self.log(f"Checkpoint saved: {path}")
-        if is_best:
-            best_path = os.path.join(self.config['model_dir'], "best_model.pt")
-            torch.save(ckpt, best_path)
-            self.log(f"Best model saved: {best_path}")
+      """Save a model checkpoint and replay buffer"""
+      # Create the standard checkpoint
+      ckpt = {
+          'iteration': iteration,
+          'network_state_dict': self.network.state_dict(),
+          'optimizer_state_dict': self.optimizer.state_dict(),
+          'config': self.config,
+          'metrics': self.training_metrics
+      }
+      path = os.path.join(self.config['model_dir'], f"model_iter_{iteration}.pt")
+      torch.save(ckpt, path)
+      self.log(f"Checkpoint saved: {path}")
+      
+      if is_best:
+          best_path = os.path.join(self.config['model_dir'], "best_model.pt")
+          torch.save(ckpt, best_path)
+          self.log(f"Best model saved: {best_path}")
+      
+      # Save only the latest replay buffer
+      try:
+          import pickle
+          import os
+          
+          # Use a fixed path for the latest buffer
+          buffer_path = os.path.join(self.config['model_dir'], "latest_buffer.pkl")
+          
+          # Also keep a backup of the previous buffer
+          backup_path = os.path.join(self.config['model_dir'], "backup_buffer.pkl")
+          
+          # If a buffer already exists, make it the backup before saving the new one
+          if os.path.exists(buffer_path):
+              if os.path.exists(backup_path):
+                  os.remove(backup_path)  # Remove old backup
+              os.rename(buffer_path, backup_path)  # Current becomes backup
+          
+          # Save the current buffer
+          buffer_data = self.trainer.data_buffer
+          with open(buffer_path, 'wb') as f:
+              pickle.dump(buffer_data, f)
+          
+          buffer_size_mb = os.path.getsize(buffer_path) / (1024 * 1024)
+          self.log(f"Replay buffer saved: {buffer_path} ({len(buffer_data)} examples, {buffer_size_mb:.1f} MB)")
+          
+      except Exception as e:
+          self.log(f"Warning: Failed to save replay buffer: {e}")
 
     def load_model(self, path):
-        """Load a model checkpoint"""
-        if not os.path.exists(path):
-            self.log(f"Model file not found: {path}")
-            return False
-        
-        try:
-            checkpoint = torch.load(path)
-            self.network.load_state_dict(checkpoint['network_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            
-            # Restore metrics and configuration if available
-            if 'metrics' in checkpoint:
-                self.training_metrics = checkpoint['metrics']
-            
-            if 'config' in checkpoint:
-                # Only update certain config parameters, not all
-                for key in ['learning_rate', 'num_simulations', 'c_puct']:
-                    if key in checkpoint['config']:
-                        self.config[key] = checkpoint['config'][key]
-            
-            # Update current iteration
-            if 'iteration' in checkpoint:
-                self.current_iteration = checkpoint['iteration']
-            
-            self.log(f"Checkpoint loaded from {path}, resuming from iteration {self.current_iteration}")
-            return True
-        
-        except Exception as e:
-            self.log(f"Error loading checkpoint: {e}")
-            return False
+      """Load a model checkpoint and replay buffer if available"""
+      if not os.path.exists(path):
+          self.log(f"Model file not found: {path}")
+          return False
+      
+      try:
+          checkpoint = torch.load(path)
+          self.network.load_state_dict(checkpoint['network_state_dict'])
+          self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+          
+          # Restore metrics and configuration if available
+          if 'metrics' in checkpoint:
+              self.training_metrics = checkpoint['metrics']
+          
+          if 'config' in checkpoint:
+              # Only update certain config parameters, not all
+              for key in ['learning_rate', 'num_simulations', 'c_puct']:
+                  if key in checkpoint['config']:
+                      self.config[key] = checkpoint['config'][key]
+          
+          # Update current iteration
+          if 'iteration' in checkpoint:
+              self.current_iteration = checkpoint['iteration']
+          
+          # Try to load buffer
+          import pickle
+          buffer_path = os.path.join(self.config['model_dir'], "latest_buffer.pkl")
+          
+          if os.path.exists(buffer_path):
+              try:
+                  with open(buffer_path, 'rb') as f:
+                      buffer_data = pickle.load(f)
+                  
+                  # Replace the current replay buffer
+                  self.trainer.data_buffer = buffer_data
+                  buffer_size_mb = os.path.getsize(buffer_path) / (1024 * 1024)
+                  self.log(f"Replay buffer loaded: {len(buffer_data)} examples, {buffer_size_mb:.1f} MB")
+              except Exception as e:
+                  self.log(f"Warning: Failed to load replay buffer: {e}")
+                  
+                  # Try backup if main buffer failed
+                  backup_path = os.path.join(self.config['model_dir'], "backup_buffer.pkl")
+                  if os.path.exists(backup_path):
+                      try:
+                          with open(backup_path, 'rb') as f:
+                              buffer_data = pickle.load(f)
+                          
+                          self.trainer.data_buffer = buffer_data
+                          buffer_size_mb = os.path.getsize(backup_path) / (1024 * 1024)
+                          self.log(f"Backup buffer loaded: {len(buffer_data)} examples, {buffer_size_mb:.1f} MB")
+                      except Exception as e2:
+                          self.log(f"Warning: Also failed to load backup buffer: {e2}")
+          
+          self.log(f"Checkpoint loaded from {path}, resuming from iteration {self.current_iteration}")
+          return True
+      
+      except Exception as e:
+          self.log(f"Error loading checkpoint: {e}")
+          return False
+
     def plot_metrics(self):
         """
         Plot training metrics using Plotly.

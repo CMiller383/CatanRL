@@ -211,7 +211,7 @@ class MCTS:
         self.batch_size = batch_size
         
         # Debug flag
-        self.debug = True
+        self.debug = False
     
     def search(self, game_state):
         """

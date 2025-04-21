@@ -5,7 +5,7 @@ from multiprocessing import Pool, cpu_count, get_context
 from AlphaZero.core.network import DeepCatanNetwork
 from AlphaZero.agent.alpha_agent import create_alpha_agent
 import functools
-
+import os
 def play_one_game_entry(args):
     """
     Worker entry point. args = (game_creator, agent_creator, config, game_idx)
@@ -14,15 +14,32 @@ def play_one_game_entry(args):
 
     # pin torch to CPU threads
     torch.set_num_threads(1)
-
+    network = None
+    if 'checkpoint_path' in config and os.path.exists(config['checkpoint_path']):
+        try:
+            # Create a temp network and load weights
+            network = DeepCatanNetwork(
+                state_dim=config['state_dim'], 
+                action_dim=config['action_dim'],
+                hidden_dim=config['hidden_dim']
+            )
+            network.load_state_dict(torch.load(config['checkpoint_path'], weights_only=True))
+            network.eval() 
+        except Exception as e:
+            print(f"Error loading checkpoint in worker: {e}")
+            network = None
     # 1) build the game and agents
     game = game_creator()
     for pid in range(len(game.agents)):
         agent = agent_creator(pid)
         agent.set_training_mode(True)
-        # enforce CPU
-        agent.network = agent.network.cpu()
-        agent.mcts.network = agent.network
+        if network is not None:
+            agent.network = network.cpu()  # Make sure it's on CPU
+            agent.mcts.network = agent.network  # Update MCTS network reference
+        else:
+            # Original behavior as fallback
+            agent.network = agent.network.cpu()
+            agent.mcts.network = agent.network
         game.agents[pid] = agent
 
     # 2) setup phase
@@ -66,7 +83,20 @@ class SelfPlayWorker:
     def _play_single_game(self, _):
         # 1) Force PyTorch to use only the CPU in this worker
         torch.set_num_threads(1)
-
+        network = None
+        if 'checkpoint_path' in config and os.path.exists(config['checkpoint_path']):
+          try:
+              # Create a temp network and load weights
+              network = DeepCatanNetwork(
+                  state_dim=config['state_dim'], 
+                  action_dim=config['action_dim'],
+                  hidden_dim=config['hidden_dim']
+              )
+              network.load_state_dict(torch.load(config['checkpoint_path']))
+              network.eval()  # Set to evaluation mode for self-play
+          except Exception as e:
+              print(f"Error loading checkpoint in worker: {e}")
+              network = None
         # 2) Build a fresh game & agents
         game = self.game_creator()
         for pid in range(len(game.agents)):
