@@ -121,7 +121,7 @@ Our implementation addresses these challenges through:
 │   │   ├── evaluator.py       # Agent evaluation
 │   │   └── ...
 │   └── utils/             # Utilities
-├── gui/                   # Game visualization (if applicable)
+├── gui/                   # PyGame
 ├── models/                # Saved model checkpoints
 └── scripts/               # Utility scripts
 ```
