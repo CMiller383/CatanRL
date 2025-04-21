@@ -211,7 +211,7 @@ class MCTS:
         self.batch_size = batch_size
         
         # Debug flag
-        self.debug = False
+        self.debug = True
     
     def search(self, game_state):
         """
@@ -235,14 +235,14 @@ class MCTS:
         # print(f"→ valid_action_mask has {valid_action_mask.sum()} Trues out of {len(valid_action_mask)} slots")
         if hasattr(self.network, 'parameters'):
           device_str = str(next(self.network.parameters()).device)
-        if self.debug:
-            print(f"MCTS using network on device: {device_str}")
+        # if self.debug:
+        #     print(f"MCTS using network on device: {device_str}")
         
         # Ensure we're on CUDA if available
-        if torch.cuda.is_available() and not device_str.startswith('cuda'):
-            if self.debug:
-                print(f"Moving network to CUDA during search")
-            self.network = self.network.to('cuda')
+        # if torch.cuda.is_available() and not device_str.startswith('cuda'):
+        #     if self.debug:
+        #         print(f"Moving network to CUDA during search")
+        #     # self.network = self.network.to('cuda')
         try:
             # Get policy and value from the network
             with torch.no_grad():

@@ -1,3 +1,4 @@
+
 import time
 import os
 from datetime import datetime
@@ -10,6 +11,30 @@ from AlphaZero.core.network import DeepCatanNetwork
 from game.board import Board
 from game.game_logic import GameLogic
 from agent.base import AgentType
+from AlphaZero.agent.alpha_agent import create_alpha_agent
+from functools import partial
+import functools
+from multiprocessing import get_context, cpu_count
+import multiprocessing
+from copy import deepcopy
+
+
+#for pickle reasons
+def top_level_create_game():
+    board = Board()
+    return GameLogic(
+        board,
+        agent_types=[AgentType.ALPHAZERO] + [AgentType.RANDOM] * 3
+    )
+
+def top_level_create_agent(player_id, config, network, device):
+    agent = create_alpha_agent(
+        player_id=player_id,
+        config=config,
+        network=network
+    )
+    agent.network.to(device)
+    return agent
 
 class TrainingPipeline:
     """
@@ -29,7 +54,7 @@ class TrainingPipeline:
             self.config = config
 
         # Determine device
-        self.device = torch.device(self.config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu'))
+        self.device = torch.device('cpu')
 
         # Metrics storage
         self.training_metrics = {
@@ -68,43 +93,56 @@ class TrainingPipeline:
         self.log_file.flush()
 
     def _init_components(self):
-        """Initialize network, optimizer, and workers"""
-        # Build and move network to device
+        # 1) Build and move your GPU network
         self.network = DeepCatanNetwork(
-            state_dim=self.config['state_dim'],
-            action_dim=self.config['action_dim'],
-            hidden_dim=self.config['hidden_dim']
+            state_dim  = self.config['state_dim'],
+            action_dim = self.config['action_dim'],
+            hidden_dim = self.config['hidden_dim']
         ).to(self.device)
 
-        # Optimizer
         self.optimizer = torch.optim.Adam(
             self.network.parameters(),
             lr=self.config['learning_rate']
         )
 
-        # Game creator
-        def create_game():
-            board = Board()
-            return GameLogic(board, agent_types=[AgentType.ALPHAZERO] + [AgentType.RANDOM] * 3)
+        # 2) Make a CPU-only copy for the workers
+        cpu_net = deepcopy(self.network).cpu()
 
-        # Agent creator
-        def create_agent(player_id):
-            from AlphaZero.agent.alpha_agent import create_alpha_agent
-            agent = create_alpha_agent(
-                player_id=player_id,
-                config=self.config,
-                network=self.network
-            )
-            agent.network.to(self.device)
-            return agent
+        # 3) Build a picklable agent_creator partial
+        agent_creator = partial(
+            top_level_create_agent,
+            config=self.config,
+            network=cpu_net,
+            device='cpu'
+        )
 
-        # Workers
-        self.self_play_worker = SelfPlayWorker(create_game, create_agent, self.config)
-        self.trainer = NetworkTrainer(self.network, self.optimizer, self.config)
-        # Pass the pipeline log function into evaluator for consistent logging
-        self.evaluator = Evaluator(create_game, create_agent, self.config, log_fn=self.log)
+        # 4) Fork a Pool *once*
+        pool_size = min(4, self.config['self_play_games'])
+        self.self_play_pool = multiprocessing.Pool(processes=pool_size)
 
+        # 5) Instantiate the worker with creators and the pool
+        self.self_play_worker = SelfPlayWorker(
+            game_creator  = top_level_create_game,
+            agent_creator = agent_creator,
+            config        = self.config,
+            pool          = self.self_play_pool
+        )
+
+        # 6) Trainer & evaluator as you already had…
+        self.trainer   = NetworkTrainer(self.network, self.optimizer, self.config)
+        self.evaluator = Evaluator(
+            game_creator  = top_level_create_game,
+            agent_creator = partial(
+                top_level_create_agent,
+                config = self.config,
+                network=self.network,
+                device = self.device
+            ),
+            config = self.config,
+            log_fn = self.log
+        )
         os.makedirs(self.config['model_dir'], exist_ok=True)
+        
 
     def train(self, num_iterations=None, resume_from=None, testing=False):
         """
@@ -122,6 +160,11 @@ class TrainingPipeline:
         start_time = time.time()
         try:
             for iteration in range(self.current_iteration, self.current_iteration + num_iterations):
+                checkpoint_path = os.path.join(self.config['model_dir'], 'latest_cpu.pth')
+                torch.save(self.network.cpu().state_dict(), checkpoint_path)
+                self.network.to(self.device)  # move it back to GPU
+                self.config['checkpoint_path'] = checkpoint_path
+
                 self.log(f"\n=== Iteration {iteration+1}/{num_iterations} ===")
                 iter_start = time.time()
 
@@ -187,6 +230,9 @@ class TrainingPipeline:
                 self.save_model(self.current_iteration)
                 self.plot_metrics()
             self.log_file.close()
+            if hasattr(self, 'self_play_pool'):
+                self.self_play_pool.close()
+                self.self_play_pool.join()
 
     def save_model(self, iteration, is_best=False):
         """Save a model checkpoint"""
