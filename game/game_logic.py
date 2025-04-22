@@ -45,11 +45,11 @@ class GameLogic:
     def do_action(self, action):
         """Execute a game move"""
         state = self.state
-        # print(state.current_player_idx)
-        # print(action)
-        # print(state.possible_actions)
-        
 
+        if state.winner != None:
+            print(f"Winner: {state.winner}")
+            return
+        
         if state.current_phase != GamePhase.REGULAR_PLAY or action not in state.possible_actions:
             return False
         
@@ -122,11 +122,13 @@ class GameLogic:
         # if self.is_current_player_alpha_zero():
         #     print("AlphaZero possible actions:", state.possible_actions)
         #     print("AlphaZero action:", action)
-        while action.type != ActionType.END_TURN:
+        
+        while action != None and state.winner == None and action.type != ActionType.END_TURN:
             self.do_action(action)
             action = agent.get_action(state)
 
         self.do_action(action)
+
 
     # def create_agent(player_idx, agent_type):
     #     if agent_type == AgentType.HUMAN:
