@@ -58,6 +58,7 @@ def main():
     config['self_play_games'] = args.games
     config['num_simulations'] = args.sims
     config['eval_games'] = args.eval_games
+    config['starting_iter'] = 1 if args.resume is None else int(args.resume.split('_')[-1].split('.')[0]) + 1
     
     print(f"\n=== AlphaZero Catan Training ===")
     print(f"Iterations: {args.iterations}")

@@ -65,7 +65,6 @@ class TrainingPipeline:
         # Set placement network flag
         self.config['use_placement_network'] = use_placement_network
         # Open log file
-        self.starting_iter = self.config.get('starting_iter', 1)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_file = open(f"logs/training_log_{timestamp}.txt", 'w')
         self.log(f"AlphaZero Catan Training started at {timestamp}")
@@ -131,109 +130,55 @@ class TrainingPipeline:
         self._init_components()
 
     def _init_placement_components(self):
-      """Initialize the placement network components"""
-      try:
-          from AlphaZero.core.initial_placement_network import InitialPlacementNetwork, InitialPlacementEncoder, InitialPlacementTrainer
-          
-          # First try to load from iteration-specific file if we're resuming
-          placement_network_loaded = False
-          if hasattr(self, 'starting_iter') and self.starting_iter > 1:
-              iter_path = os.path.join(self.config['model_dir'], f'placement_network_iter_{self.starting_iter}.pt')
-              if os.path.exists(iter_path):
-                  try:
-                      self.log(f"Loading iteration-specific placement network from {iter_path}")
-                      checkpoint = torch.load(iter_path, map_location=torch.device('cpu'))
-                      
-                      # Get state dict
-                      state_dict = checkpoint.get('network_state_dict')
-                      
-                      if 'fc3.weight' in state_dict:
-                          # Get dimensions directly from fc3.weight
-                          fc3_shape = state_dict['fc3.weight'].shape
-                          output_dim = fc3_shape[0]  # This should be 54
-                          hidden_dim = fc3_shape[1]  # This should be 128
-                          
-                          # Get input dimension from fc1.weight
-                          input_dim = state_dict['fc1.weight'].shape[1] if 'fc1.weight' in state_dict else 260
-                          
-                          self.log(f"Network dimensions: input_dim={input_dim}, hidden_dim={hidden_dim}, output_dim={output_dim}")
-                          
-                          # Create network with correct dimensions
-                          self.placement_network = InitialPlacementNetwork(
-                              input_dim=input_dim,
-                              hidden_dim=hidden_dim,
-                              output_dim=output_dim
-                          )
-                          
-                          # Load weights
-                          self.placement_network.load_state_dict(state_dict)
-                          
-                          # Make available globally for agents
-                          globals()['placement_network'] = self.placement_network
-                          
-                          self.log(f"Successfully loaded placement network from iteration {self.starting_iter}")
-                          placement_network_loaded = True
-                      else:
-                          self.log("Invalid network structure in checkpoint")
-                  except Exception as e:
-                      self.log(f"Error loading iteration-specific placement network: {e}")
-          
-          # If we haven't loaded from iteration file, try the default file
-          if not placement_network_loaded:
-              placement_path = os.path.join(self.config['model_dir'], 'placement_network.pt')
-              if os.path.exists(placement_path):
-                  try:
-                      self.log(f"Loading default placement network from {placement_path}")
-                      checkpoint = torch.load(placement_path, map_location=torch.device('cpu'))
-                      
-                      # Get state dict
-                      state_dict = checkpoint.get('network_state_dict')
-                      
-                      if 'fc3.weight' in state_dict:
-                          # Get dimensions directly from fc3.weight
-                          fc3_shape = state_dict['fc3.weight'].shape
-                          output_dim = fc3_shape[0]  # This should be 54
-                          hidden_dim = fc3_shape[1]  # This should be 128
-                          
-                          # Get input dimension from fc1.weight
-                          input_dim = state_dict['fc1.weight'].shape[1] if 'fc1.weight' in state_dict else 260
-                          
-                          self.log(f"Network dimensions: input_dim={input_dim}, hidden_dim={hidden_dim}, output_dim={output_dim}")
-                          
-                          # Create network with correct dimensions
-                          self.placement_network = InitialPlacementNetwork(
-                              input_dim=input_dim,
-                              hidden_dim=hidden_dim,
-                              output_dim=output_dim
-                          )
-                          
-                          # Load weights
-                          self.placement_network.load_state_dict(state_dict)
-                          
-                          # Make available globally for agents
-                          globals()['placement_network'] = self.placement_network
-                          
-                          self.log(f"Successfully loaded default placement network")
-                          placement_network_loaded = True
-                      else:
-                          self.log("Invalid network structure in checkpoint")
-                  except Exception as e:
-                      self.log(f"Error loading default placement network: {e}, creating new one")
-                      self._create_new_placement_network()
-              else:
-                  self._create_new_placement_network()
-          
-          # Create encoder and trainer
-          self.placement_encoder = InitialPlacementEncoder()
-          self.placement_trainer = InitialPlacementTrainer(
-              self.placement_network, 
-              lr=self.config['placement_lr']
-          )
-          
-          self.log("Placement network components initialized successfully")
-      except Exception as e:
-          self.log(f"Error initializing placement network components: {e}")
-          self.config['use_placement_network'] = False
+        """Initialize the placement network components"""
+        try:
+            from AlphaZero.core.initial_placement_network import InitialPlacementNetwork, InitialPlacementEncoder, InitialPlacementTrainer
+            
+            # Check for existing model
+            placement_path = os.path.join(self.config['model_dir'], 'placement_network.pt')
+            if os.path.exists(placement_path):
+                try:
+                    self.log(f"Loading initial placement network from {placement_path}")
+                    checkpoint = torch.load(placement_path, map_location=torch.device('cpu'))
+                    
+                    # Get state dict
+                    state_dict = checkpoint.get('network_state_dict')
+                    
+                    # Create network - we don't know the exact dimensions but can infer them
+                    input_dim = next(iter(state_dict.values())).shape[1] if 'fc1.weight' in state_dict else 260
+                    hidden_dim = next(iter(state_dict.values())).shape[0] if 'fc1.weight' in state_dict else 128
+                    output_dim = next(iter(state_dict.values())).shape[0] if 'fc3.weight' in state_dict else 54
+                    
+                    self.placement_network = InitialPlacementNetwork(
+                        input_dim=input_dim,
+                        hidden_dim=hidden_dim,
+                        output_dim=output_dim
+                    )
+                    
+                    # Load weights
+                    self.placement_network.load_state_dict(state_dict)
+                    
+                    # Make available globally for agents
+                    globals()['placement_network'] = self.placement_network
+                    
+                    self.log(f"Successfully loaded placement network with input_dim={input_dim}, hidden_dim={hidden_dim}")
+                except Exception as e:
+                    self.log(f"Error loading placement network: {e}, creating new one")
+                    self._create_new_placement_network()
+            else:
+                self._create_new_placement_network()
+                
+            # Create encoder and trainer
+            self.placement_encoder = InitialPlacementEncoder()
+            self.placement_trainer = InitialPlacementTrainer(
+                self.placement_network, 
+                lr=self.config['placement_lr']
+            )
+            
+            self.log("Placement network components initialized successfully")
+        except Exception as e:
+            self.log(f"Error initializing placement network components: {e}")
+            self.config['use_placement_network'] = False
             
     def _create_new_placement_network(self):
         """Create a new placement network"""
