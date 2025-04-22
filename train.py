@@ -49,7 +49,7 @@ def main():
     elif args.overnight:
         args.iterations = 100
         args.games = 30
-        args.sims = 150
+        args.sims = 50
         args.eval_games = 15
         print("Running in OVERNIGHT mode (extended training run)")
     config = get_config()

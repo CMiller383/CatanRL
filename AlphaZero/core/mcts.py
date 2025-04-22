@@ -284,71 +284,47 @@ class MCTS:
             # Return an empty policy if root evaluation fails
             return {}, 0.0
         
-        # Prepare arrays for batch processing
-        states_to_evaluate = []
-        nodes_pending_evaluation = []
+        # Prepare for batch processing with pre-allocated arrays
+        batch_size = self.batch_size
+        states_batch = []
+        nodes_batch = []
         
-        # Run simulations
+        # Run simulations with efficient batching
         simulation_count = 0
         for _ in range(self.num_simulations):
-            # Select a node to evaluate
+            # Select and add to batch
             node, path = self._select_node_for_evaluation(root)
             if node and node.game_state:
-                # If we found a node to evaluate, add it to our batch
                 try:
-                    states_to_evaluate.append(self.state_encoder.encode_state(node.game_state))
-                    nodes_pending_evaluation.append((node, path))
-                except Exception as e:
-                    if self.debug:
-                        print(f"Error encoding state: {e}")
-                    # Remove virtual loss
-                    for n in path:
-                        n.remove_virtual_loss()
-                    continue
-                
-                # If we have enough nodes or this is the last simulation, evaluate them
-                if len(states_to_evaluate) >= self.batch_size or _ == self.num_simulations - 1:
-                    if states_to_evaluate:
-                        # Batch evaluate the states
-                        try:
-                            # Convert list of arrays to a single numpy array first (fixes warning)
-                            states_np_array = np.array(states_to_evaluate, dtype=np.float32)
-                            batch_tensor = torch.FloatTensor(states_np_array)
-                            if hasattr(self.network, 'parameters'):
-                                device = next(self.network.parameters()).device
-                                batch_tensor = batch_tensor.to(device)
-
+                    state_encoded = self.state_encoder.encode_state(node.game_state)
+                    states_batch.append(state_encoded)
+                    nodes_batch.append((node, path))
+                    
+                    # Process batch when full or at end
+                    if len(states_batch) >= batch_size or _ == self.num_simulations - 1:
+                        if states_batch:
                             with torch.no_grad():
+                                # Batch convert and process at once
+                                batch_tensor = torch.FloatTensor(np.array(states_batch)).to(device)
                                 batch_policies, batch_values = self.network(batch_tensor)
-                            
-                            # Process each result and backpropagate
-                            for i, (eval_node, eval_path) in enumerate(nodes_pending_evaluation):
-                                try:
-                                    # Complete the evaluation with the network results
-                                    policy = batch_policies[i].detach().cpu().numpy()
+                                
+                                # Process each result efficiently
+                                for i, (eval_node, eval_path) in enumerate(nodes_batch):
+                                    policy = batch_policies[i].cpu().numpy()
                                     value = batch_values[i].item()
-                                    
-                                    # Process the evaluation
                                     self._process_evaluation(eval_node, eval_path, policy, value)
                                     simulation_count += 1
-                                except Exception as e:
-                                    if self.debug:
-                                        print(f"Error processing evaluation: {e}")
-                                    # Remove virtual loss
-                                    for n in eval_path:
-                                        n.remove_virtual_loss()
-                        except Exception as e:
-                            if self.debug:
-                                print(f"Error in batch evaluation: {e}")
-                            # Remove virtual loss from all nodes
-                            for _, path in nodes_pending_evaluation:
-                                for n in path:
-                                    n.remove_virtual_loss()
-                        
-                        # Clear batches for next round
-                        states_to_evaluate = []
-                        nodes_pending_evaluation = []
-        
+                            
+                            # Clear batch
+                            states_batch = []
+                            nodes_batch = []
+                except Exception as e:
+                    # Handle errors and cleanup
+                    for n in path:
+                        n.remove_virtual_loss()
+                    if self.debug:
+                        print(f"Error during node evaluation: {e}")
+          
         if self.debug:
             print(f"Completed {simulation_count} successful simulations out of {self.num_simulations} attempts")
             print(f"MCTS search took {time.time() - start_time:.2f} seconds")

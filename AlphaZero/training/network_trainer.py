@@ -37,7 +37,7 @@ class NetworkTrainer:
             game_data: List of state, action_probs, and reward tuples
         """
         self.data_buffer.extend(game_data)
-
+        
     def train(self, epochs=None, batch_size=None):
         """
         Train the network on the current data buffer

@@ -185,7 +185,7 @@ class TrainingPipeline:
 
                 # 3. Evaluation every 2 iters
                 eval_metrics = {'win_rate': 0, 'avg_vp': 0, 'avg_game_length': 0}
-                if (iteration + 1) % 5 == 0:
+                if (iteration + 1) % 2 == 0:
                     self.network.eval()
                     self.log("Evaluating network...")
                     ev_start = time.time()
@@ -219,6 +219,8 @@ class TrainingPipeline:
                     self.log(f"Resource usage: CPU {cpu:.1f}%, RAM {ram:.1f}%")
 
                 self.current_iteration = iteration + 1
+                param_sum = sum(p.sum().item() for p in self.network.parameters())
+                self.log(f"Network parameter sum after training: {param_sum:.6f}")
 
         except KeyboardInterrupt:
             self.log("Training interrupted by user; saving current model...")

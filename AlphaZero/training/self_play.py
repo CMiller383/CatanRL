@@ -14,20 +14,33 @@ def play_one_game_entry(args):
 
     # pin torch to CPU threads
     torch.set_num_threads(1)
+    checkpoint_path = config.get('checkpoint_path')
     network = None
-    if 'checkpoint_path' in config and os.path.exists(config['checkpoint_path']):
+    if checkpoint_path and os.path.exists(checkpoint_path):
         try:
-            # Create a temp network and load weights
             network = DeepCatanNetwork(
-                state_dim=config['state_dim'], 
+                state_dim=config['state_dim'],
                 action_dim=config['action_dim'],
                 hidden_dim=config['hidden_dim']
             )
-            network.load_state_dict(torch.load(config['checkpoint_path'], weights_only=True))
-            network.eval() 
+
+            # PyTorch 2.5: use map_location to keep everything on CPU
+            state_dict = torch.load(checkpoint_path, map_location='cpu')
+            network.load_state_dict(state_dict, strict=False)    # allow extra keys
+            network.eval()
+
+            # simple checksum → helps spot stale / identical loads
+            if game_idx == 0:
+                # Calculate total parameter sum (same as after training)
+                param_sum = sum(p.sum().item() for p in network.parameters())
+                print(f"[Worker {game_idx}] Network parameter sum: {param_sum:.6f}")
+
         except Exception as e:
-            print(f"Error loading checkpoint in worker: {e}")
+            print(f"[Worker {game_idx}] ✗ failed to load checkpoint: {e}")
             network = None
+    else:
+        print(f"[Worker {game_idx}] ✗ checkpoint missing – using random net")
+
     # 1) build the game and agents
     game = game_creator()
     for pid in range(len(game.agents)):
@@ -56,6 +69,8 @@ def play_one_game_entry(args):
     # 4) collect data
     all_data = []
     for pid, agent in enumerate(game.agents):
+        game.state.move_count = move_count
+        game.state.max_moves = max_moves
         reward = calculate_reward(game.state, pid)
         agent.record_game_result(reward)
         all_data.extend(agent.get_game_history())
@@ -79,56 +94,6 @@ class SelfPlayWorker:
         self.agent_creator = agent_creator
         self.config = config
         self.pool = pool
-
-    def _play_single_game(self, _):
-        # 1) Force PyTorch to use only the CPU in this worker
-        torch.set_num_threads(1)
-        network = None
-        if 'checkpoint_path' in config and os.path.exists(config['checkpoint_path']):
-          try:
-              # Create a temp network and load weights
-              network = DeepCatanNetwork(
-                  state_dim=config['state_dim'], 
-                  action_dim=config['action_dim'],
-                  hidden_dim=config['hidden_dim']
-              )
-              network.load_state_dict(torch.load(config['checkpoint_path']))
-              network.eval()  # Set to evaluation mode for self-play
-          except Exception as e:
-              print(f"Error loading checkpoint in worker: {e}")
-              network = None
-        # 2) Build a fresh game & agents
-        game = self.game_creator()
-        for pid in range(len(game.agents)):
-            agent = self.agent_creator(pid)
-            agent.set_training_mode(True)
-
-            # 3) Immediately move this agent’s net to CPU
-            agent.network = agent.network.cpu()
-            # also update the MCTS object to use that CPU net
-            agent.mcts.network = agent.network
-
-            game.agents[pid] = agent
-
-        # 4) Play through the setup phase
-        while not game.is_setup_complete():
-            game.process_ai_turn()
-
-        # 5) Main game loop
-        move_count = 0
-        max_moves = self.config.get('max_moves', 200)
-        while not self._is_game_over(game.state) and move_count < max_moves:
-            move_count += 1
-            game.process_ai_turn()
-
-        # 6) Collect all the history & rewards
-        all_data = []
-        for pid, agent in enumerate(game.agents):
-            reward = self._calculate_reward(game.state, player_id=pid)
-            agent.record_game_result(reward)
-            all_data.extend(agent.get_game_history())
-
-        return all_data
 
 
     def generate_games(self, num_games):
@@ -236,6 +201,10 @@ class SelfPlayWorker:
 def calculate_reward(state, player_id):
     player = state.players[player_id]
     player_vp = player.victory_points
+    
+    # Get move count from state (with fallbacks)
+    move_count = getattr(state, 'move_count', 200)
+    max_moves = getattr(state, 'max_moves', 200)
 
     # Determine the winner index robustly
     if state.winner is not None:
@@ -253,20 +222,34 @@ def calculate_reward(state, player_id):
     # Base reward
     base_reward = 1.0 if winner_idx == player_id else -1.0
 
-    # VP‑difference component
+    # Time bonus component - only applies for wins
+    time_bonus = 0.0
+    if winner_idx == player_id:
+        # Calculate efficiency bonus (higher for quicker wins)
+        # Will be 0.5 for immediate wins, 0.0 for max moves
+        time_bonus = 0.5 * (1.0 - move_count / max_moves)
+    
+    # VP difference component
     vp_diff = player_vp - max_vp
     vp_component = vp_diff / 10.0
 
-    # Progress, diversity, etc. as before…
+    # Progress component
     progress_score = (len(player.settlements) * 0.1 +
-                      len(player.cities)     * 0.2 +
-                      len(player.roads)      * 0.05 +
-                      len(player.dev_cards)  * 0.1)
+                      len(player.cities) * 0.2 +
+                      len(player.roads) * 0.05 +
+                      len(player.dev_cards) * 0.1)
     progress_component = progress_score / 5.0
 
-    diversity = sum(1 for r,c in player.resources.items() if c>0) / 5.0
+    # Resource diversity component
+    diversity = sum(1 for r, c in player.resources.items() if c > 0) / 5.0
 
-    return (0.6 * base_reward +
-            0.2 * vp_component +
-            0.15 * progress_component +
-            0.05 * diversity)
+    # Debug logging for first player
+    if player_id == 0 and winner_idx == 0:
+        print(f"Win reward: base={base_reward:.2f}, time_bonus={time_bonus:.2f} (moves: {move_count}/{max_moves})")
+
+    # Combine components with weights
+    return (0.5 * base_reward +       # Reduced to make room for time bonus
+            0.2 * time_bonus +        # New time efficiency component
+            0.15 * vp_component +     # Slightly reduced
+            0.1 * progress_component + # Slightly reduced
+            0.05 * diversity)         # Maintained

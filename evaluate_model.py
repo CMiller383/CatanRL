@@ -400,7 +400,7 @@ def main():
                         help="Override MCTS simulation count (default: 100)")
     parser.add_argument("--c-puct", type=float, default=1.5,
                         help="Exploration constant for MCTS (default: 1.5)")
-    parser.add_argument("--batch-size", type=int, default=8,
+    parser.add_argument("--batch-size", type=int, default=12,
                         help="Batch size for MCTS (default: 8)")
     parser.add_argument("--compare", action="store_true",
                         help="Compare with training evaluator implementation")

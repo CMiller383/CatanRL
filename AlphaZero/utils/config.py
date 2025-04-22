@@ -12,12 +12,12 @@ DEFAULT_CONFIG = {
     'eval_games': 10,
     'epochs': 10,
     'batch_size': 256,
-    'buffer_size': 200000,
+    'buffer_size': 100000,
     
     # MCTS parameters
     'num_simulations': 100,
     'c_puct': 1.5,
-    'mcts_batch_size': 32,  # Size of batches for MCTS network evaluation
+    'mcts_batch_size': 12,  # Size of batches for MCTS network evaluation
     
     # Game parameters
     'max_moves': 200,
