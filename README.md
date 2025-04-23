@@ -3,6 +3,46 @@
 ## Overview
 This project implements an AlphaZero-based reinforcement learning agent for playing the board game Settlers of Catan. By combining Monte Carlo Tree Search (MCTS) with deep neural networks, our agent learns to play competitive Catan without human-crafted game heuristics.
 
+## Environment Setup
+
+1. **Clone the repo**  
+   ```bash
+   git clone https://github.com/CMiller383/CatanRL.git
+   cd catanrl
+   ```
+2. **Create a virtual environment**  
+   ```bash
+    conda create -n catan-env python=3.11.11
+    conda activate catan-env
+   ```
+3. **Install dependencies**  
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Playing
+
+Use the `main.py` entrypoint to launch a game:
+```bash
+python main.py [options]
+```
+
+**Examples:**
+- **Play vs. AlphaZero**  
+  ```bash
+  python main.py --alphazero --model models/best_model.pt --player-position 1
+  ```
+- **Watch AI-only game**  
+  ```bash
+  python main.py --alphazero --all-ai
+  ```
+- **Custom agents** (H=Human, R=Random, E=Heuristic, A=AlphaZero):  
+  ```bash
+  python main.py --agents H,A,R,R
+  ```
+See `main.py` for more options and details.
+
+
 ## Features
 - **Custom Game Engine**: Headless Catan implementation using a graph-based hexagonal board representation
 - **Reinforcement Learning Agent**: AlphaZero-style agent that learns through self-play
@@ -61,44 +101,6 @@ Our AlphaZero implementation follows the core principles from the original DeepM
 - Full trading system
 - Manual resource discarding logic
 
-## Environment Setup
-
-1. **Clone the repo**  
-   ```bash
-   git clone https://github.com/CMiller383/CatanRL.git
-   cd catanrl
-   ```
-2. **Create a virtual environment**  
-   ```bash
-    conda create -n catan-env python=3.11.11
-    conda activate catan-env
-   ```
-3. **Install dependencies**  
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Playing
-
-Use the `main.py` entrypoint to launch a game:
-```bash
-python main.py [options]
-```
-
-**Examples:**
-- **Play vs. AlphaZero**  
-  ```bash
-  python main.py --alphazero --model models/best_model.pt --player-position 1
-  ```
-- **Watch AI-only game**  
-  ```bash
-  python main.py --alphazero --all-ai
-  ```
-- **Custom agents** (H=Human, R=Random, E=Heuristic, A=AlphaZero):  
-  ```bash
-  python main.py --agents H,A,R,R
-  ```
-See `main.py` for more options and details.
 ## Training
 
 Training can take a long time depending on mode and hardware—be patient. All available training configuration options are defined in `AlphaZero/utils/config.py`.
