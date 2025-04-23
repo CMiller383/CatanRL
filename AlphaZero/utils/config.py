@@ -60,7 +60,7 @@ EVAL_CONFIG = {
     'device': 'cpu',          # Use CPU for evaluation
     
     # Placement network settings
-    'use_placement_network': False, # Use placement network for evaluation (has not been trained, so set to False unless you know what you're doing)
+    'use_placement_network': False, # Use placement network for evaluation (has not been trained well, so set to False unless you know what you're doing)
     
     # Paths
     'model_dir': 'models'

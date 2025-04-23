@@ -44,7 +44,7 @@ def create_agent(player_id, agent_type, model_path=None):
             # Load a trained model
             from AlphaZero.utils.alphazero_utils import load_alphazero_agent
             agent = load_alphazero_agent(player_id, model_path, config=get_eval_config())
-            if get_config()['use_placement_network']:
+            if get_eval_config()['use_placement_network']:
                 # Load the placement network if specified
                 placement_model_path = 'models/placement_model.pth'
                 if os.path.exists(placement_model_path):
