@@ -1,0 +1,23 @@
+colorama @ file:///C:/ci_311/colorama_1676422310965/work
+filelock @ file:///C:/b/abs_f2gie28u58/croot/filelock_1700591233643/work
+gmpy2 @ file:///C:/b/abs_d8ki0o0h97/croot/gmpy2_1738085498525/work
+graphviz==0.20.3
+Jinja2 @ file:///C:/b/abs_920kup4e6u/croot/jinja2_1741711580669/work
+kaleido==0.2.1
+MarkupSafe @ file:///C:/b/abs_a0ma7ge0jc/croot/markupsafe_1738584052792/work
+mkl-service==2.4.0
+mkl_fft @ file:///C:/Users/dev-admin/mkl/mkl_fft_1730823082242/work
+mkl_random @ file:///C:/Users/dev-admin/mkl/mkl_random_1730822522280/work
+mpmath @ file:///C:/b/abs_7833jrbiox/croot/mpmath_1690848321154/work
+networkx @ file:///C:/b/abs_b054htfn9t/croot/networkx_1737043671910/work
+numpy @ file:///C:/b/abs_0123vcxhf8/croot/numpy_and_numpy_base_1725470331966/work/dist/numpy-2.0.1-cp311-cp311-win_amd64.whl#sha256=46eb5850478cda64bda6d2f2d3d6ad8ceeb7cc168b83532e4f9dbbcb42e22ab2
+packaging @ file:///C:/b/abs_3by6s2fa66/croot/packaging_1734472138782/work
+plotly @ file:///C:/b/abs_28qon8a90a/croot/plotly_1740385581534/work
+psutil @ file:///C:/b/abs_b5gv3mn55h/croot/psutil_1736371546320/work
+pygame @ file:///D:/bld/pygame_1727636577592/work
+PyYAML @ file:///C:/b/abs_14xkfs39bx/croot/pyyaml_1728657968772/work
+sympy @ file:///C:/b/abs_b4u17p23yg/croot/sympy_1738108511395/work
+tenacity @ file:///C:/b/abs_1749lsqys6/croot/tenacity_1730304400080/work
+torch==2.5.1
+tqdm @ file:///C:/b/abs_0eh9b6xugj/croot/tqdm_1738945553987/work
+typing_extensions @ file:///C:/b/abs_0ffjxtihug/croot/typing_extensions_1734714875646/work

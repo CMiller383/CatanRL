@@ -13,6 +13,7 @@ This project implements an AlphaZero-based reinforcement learning agent for play
 ## Technical Implementation
 
 ### Game Engine Architecture
+
 The game engine implements the complete Settlers of Catan rule set in a highly optimized, graph-based representation:
 
 - **Board Representation**: The board is modeled as a collection of hexes, spots (vertices), and roads (edges)
@@ -35,103 +36,130 @@ The game engine implements the complete Settlers of Catan rule set in a highly o
 
 Our AlphaZero implementation follows the core principles from the original DeepMind paper with adaptations for Catan:
 
-#### Neural Network Architecture
+- **Deep Residual Network**: Modified ResNet with dual heads (policy & value)
+- **State Encoding**: Rich representation of board, resources, and development cards
+- **Policy Head**: Outputs move probabilities
+- **Value Head**: Estimates win probability
+- **Implementation**: PyTorch-based, configurable via `AlphaZero/utils/config.py`
 
-- **Deep Residual Network**: Uses a modified ResNet with dual heads
-  - **State Encoding**: Rich encoding of the game state (board, resources, development cards)
-  - **Policy Head**: Outputs probability distribution over all possible actions
-  - **Value Head**: Estimates expected outcome (win probability) from current state
-  - **Implementation**: PyTorch-based with configurable layers and parameters
+### Monte Carlo Tree Search (MCTS)
 
-#### Monte Carlo Tree Search (MCTS)
+- **Selection**: PUCT algorithm for exploration/exploitation
+- **Expansion**: Child nodes created with policy priors
+- **Evaluation**: Value network estimates position strength
+- **Backpropagation**: Statistics updated based on evaluations
+- **Action Selection**: Temperature-controlled sampling during training
 
-- **Search Algorithm**: Enhanced MCTS with neural network guidance
-  - **Selection**: Uses PUCT algorithm to balance exploration and exploitation
-  - **Expansion**: Creates child nodes for valid actions with probabilities from policy network
-  - **Evaluation**: Uses value network to estimate position strength
-  - **Backpropagation**: Updates node statistics based on evaluation results
-  - **Action Selection**: Temperature-based sampling for exploration during training
+### Optimizations
 
-- **Optimizations**:
-  - Batched neural network evaluation for efficiency
-  - Virtual loss for parallel search
-  - Early pruning of low-value branches
+- Batched neural network evaluation for throughput
+- Virtual loss to support parallel search
+- Early pruning of low-value branches
 
-#### Training Pipeline
-
-- **Self-Play**: Agents generate training data by playing against themselves
-  - Automatic generation of diverse, high-quality gameplay examples
-  - Parallel execution for faster data collection
-  - Action selection with temperature parameter for exploration
- 
-- **Neural Network Training**:
-  - MSE loss for value head (predicting game outcome)
-  - Cross-entropy loss for policy head (matching improved MCTS policy)
-  - Gradient clipping for stable learning
-  - Replay buffer for experience reuse
-
-- **Evaluation**:
-  - Regular benchmarking against baseline agents
-  - Detailed metrics tracking (win rate, VP acquisition, building patterns)
-  - Model versioning and checkpointing
-
-### Adaptations for Catan
-
-Catan poses unique challenges compared to games like Chess or Go:
-
-1. **Stochasticity**: Dice rolls introduce randomness, requiring value network adaptation
-2. **Partial Observability**: Limited information about opponent resources
-3. **Complex Action Space**: Many action types with different constraints
-4. **Resource Management**: Economy and trading aspects
-5. **Negotiation**: Simplified trading model for AI training
-
-Our implementation addresses these challenges through:
-
-- Enhanced state representation capturing resource dynamics
-- Sophisticated reward function balancing immediate and long-term objectives
-- Action space design that encompasses the full range of Catan strategies
-- Training with explicit exploration to handle the game's branching factor
+## TODO
+- Ports support in the engine
+- Full trading system
+- Manual resource discarding logic
 
 ## Repository Structure
 
 ```
 ├── game/                  # Core game engine
-│   ├── board.py           # Board representation
-│   ├── game_state.py      # Game state management
-│   ├── rules.py           # Game rules implementation
-│   ├── player.py          # Player state and actions
-│   └── ...
+│   ├── board.py           # Board representation
+│   ├── game_state.py      # Game state management
+│   ├── rules.py           # Game rules implementation
+│   ├── player.py          # Player state and actions
+│   └── ...
 ├── agent/                 # Agent implementations
-│   ├── base.py            # Base agent interface
-│   ├── random_agent.py    # Random baseline agent
-│   ├── human_agent.py     # Human player interface
-│   └── ...
+│   ├── base.py            # Base agent interface
+│   ├── random_agent.py    # Random baseline agent
+│   ├── human_agent.py     # Human player interface
+│   └── ...
 ├── AlphaZero/             # AlphaZero implementation
-│   ├── core/              # Core MCTS and neural network
-│   │   ├── network.py     # Neural network implementation
-│   │   └── mcts.py        # Monte Carlo Tree Search
-│   ├── agent/             # AlphaZero agent
-│   │   └── alpha_agent.py # Main agent implementation
-│   ├── model/             # Model components
-│   │   ├── state_encoder.py  # State encoding
-│   │   └── action_mapper.py  # Action space mapping
-│   ├── training/          # Training infrastructure
-│   │   ├── self_play.py      # Self-play data generation
-│   │   ├── network_trainer.py # Neural network training
-│   │   ├── evaluator.py       # Agent evaluation
-│   │   └── ...
-│   └── utils/             # Utilities
-├── gui/                   # PyGame
+│   ├── core/              # MCTS & neural network
+│   │   ├── network.py     # Neural network implementation
+│   │   └── mcts.py        # Monte Carlo Tree Search
+│   ├── agent/             # AlphaZero agent
+│   │   └── alpha_agent.py # Main agent implementation
+│   ├── model/             # Model components
+│   ├── training/          # Training infrastructure
+│   │   ├── self_play.py    # Self-play data generation
+│   │   ├── network_trainer.py # Neural network training
+│   │   └── evaluator.py     # Agent evaluation
+│   └── utils/             # Utilities & config parsing
+├── gui/                   # PyGame frontend
 ├── models/                # Saved model checkpoints
 └── scripts/               # Utility scripts
 ```
 
-## Playing and Training
-Coming soon
+## Environment Setup
+
+1. **Clone the repo**  
+   ```bash
+   git clone https://github.com/CMiller383/CatanRL.git
+   cd catanrl
+   ```
+2. **Create a virtual environment**  
+   ```bash
+    conda create -n catan-env python=3.11.11
+    conda activate catan-env
+   ```
+3. **Install dependencies**  
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Playing
+
+Use the `main.py` entrypoint to launch a game:
+```bash
+python main.py [options]
+```
+
+**Examples:**
+- **Play vs. AlphaZero**  
+  ```bash
+  python main.py --alphazero --model models/best_model.pt --player-position 1
+  ```
+- **Watch AI-only game**  
+  ```bash
+  python main.py --alphazero --all-ai
+  ```
+- **Custom agents** (H=Human, R=Random, E=Heuristic, A=AlphaZero):  
+  ```bash
+  python main.py --agents H,A,R,R
+  ```
+See `main.py` for more options and details.
+## Training
+
+Training can take a long time depending on mode and hardware—be patient. All available training configuration options are defined in `AlphaZero/utils/config.py`.
+
+Recommended to use notebook provided and cloud based training—local is not gonna be fast.
+
+Start training with the `train.py` script:
+```bash
+python train.py [options]
+```
+
+**Common modes:**
+- `--quick`: 1 iteration, 2 games, 10 simulations
+- `--medium`: 10 iterations, 5 games, 50 simulations
+- `--full`: 50 iterations, 20 games, 100 simulations
+- `--overnight`: 100 iterations, 30 games, 50 simulations
+
+**Other flags:**
+- `--iterations N`: number of training iterations
+- `--games N`: number of self-play games per iteration
+- `--sims N`: number of MCTS simulations per move
+- `--eval-games N`: number of evaluation games
+- `--resume PATH`: resume from model checkpoint
+
+See `train.py` for more details.
 
 ## Contributors
-- Christian Lindler ([clindler3@gatech.edu](mailto:clindler3@gatech.edu))
 - Cole Miller ([cmiller383@gatech.edu](mailto:cmiller383@gatech.edu))
+- Christian Lindler ([clindler3@gatech.edu](mailto:clindler3@gatech.edu))
 
 ## License
 This project is licensed under the MIT License.
+
