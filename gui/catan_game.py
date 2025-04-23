@@ -8,6 +8,7 @@ from gui.input_handler import InputHandler
 from gui.ui_components import ResourceSelectionHandler, StealSelectionHandler
 from game.board import Board
 from game.game_logic import GameLogic, check_game_over
+import sys
 
 class CatanGame:
     def __init__(self, window_width=None, window_height=None, agent_types=None):
@@ -136,7 +137,7 @@ class CatanGame:
                         running = False
                 
                 # Add a small delay to make AI turns visible (every 30 frames = 0.5 seconds at 60fps)
-                if self.ai_thinking_timer >= 10:
+                if self.ai_thinking_timer >= 30:
                     self.ai_thinking_timer = 0
                     
                     # Let the AI make its move
