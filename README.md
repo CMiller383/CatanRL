@@ -61,37 +61,6 @@ Our AlphaZero implementation follows the core principles from the original DeepM
 - Full trading system
 - Manual resource discarding logic
 
-## Repository Structure
-
-```
-├── game/                  # Core game engine
-│   ├── board.py           # Board representation
-│   ├── game_state.py      # Game state management
-│   ├── rules.py           # Game rules implementation
-│   ├── player.py          # Player state and actions
-│   └── ...
-├── agent/                 # Agent implementations
-│   ├── base.py            # Base agent interface
-│   ├── random_agent.py    # Random baseline agent
-│   ├── human_agent.py     # Human player interface
-│   └── ...
-├── AlphaZero/             # AlphaZero implementation
-│   ├── core/              # MCTS & neural network
-│   │   ├── network.py     # Neural network implementation
-│   │   └── mcts.py        # Monte Carlo Tree Search
-│   ├── agent/             # AlphaZero agent
-│   │   └── alpha_agent.py # Main agent implementation
-│   ├── model/             # Model components
-│   ├── training/          # Training infrastructure
-│   │   ├── self_play.py    # Self-play data generation
-│   │   ├── network_trainer.py # Neural network training
-│   │   └── evaluator.py     # Agent evaluation
-│   └── utils/             # Utilities & config parsing
-├── gui/                   # PyGame frontend
-├── models/                # Saved model checkpoints
-└── scripts/               # Utility scripts
-```
-
 ## Environment Setup
 
 1. **Clone the repo**  
