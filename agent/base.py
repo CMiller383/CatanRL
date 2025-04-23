@@ -1,6 +1,7 @@
 # agent/base.py
 from enum import Enum
-
+from AlphaZero.utils.config import get_config, get_eval_config
+import torch
 class AgentType(Enum):
     HUMAN = 0
     RANDOM = 1
@@ -42,7 +43,17 @@ def create_agent(player_id, agent_type, model_path=None):
         if model_path:
             # Load a trained model
             from AlphaZero.utils.alphazero_utils import load_alphazero_agent
-            return load_alphazero_agent(player_id, model_path)
+            agent = load_alphazero_agent(player_id, model_path, config=get_eval_config())
+            if get_config()['use_placement_network']:
+                # Load the placement network if specified
+                placement_model_path = 'models/placement_model.pth'
+                if os.path.exists(placement_model_path):
+                    agent.load_placement_network(placement_model_path)
+                else:
+                    print(f"Placement model not found at {placement_model_path}.")
+            return agent
+        
+                
         else:
             # Create a new untrained agent for training
             from AlphaZero.agent.alpha_agent import create_alpha_agent

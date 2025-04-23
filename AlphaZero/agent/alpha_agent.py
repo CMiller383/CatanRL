@@ -111,19 +111,41 @@ class AlphaZeroAgent(Agent):
             score += port_bonus
 
         return score
-    def set_initial_placement_network(self, network):
+    def set_initial_placement_network(self, network=None, model_path=None):
         """
         Set the initial placement network for the agent
         
         Args:
             network: The placement network to use
         """
-        self.initial_placement_network = network
-        
+        from AlphaZero.core.initial_placement_network import InitialPlacementNetwork
+        if network is not None and not isinstance(network, InitialPlacementNetwork):
+            self.initial_placement_network = network
+        if self.initial_placement_network is None and model_path:
+            # Load the network from a file if provided
+                checkpoint = torch.load(model_path, map_location='cpu')
+                if 'network_state_dict' in checkpoint:
+                    state_dict = checkpoint['network_state_dict']
+                    input_dim = 260  # Default
+                    hidden_dim = 128  # Default
+                    if 'fc1.weight' in state_dict:
+                        input_dim = state_dict['fc1.weight'].shape[1]
+                        hidden_dim = state_dict['fc1.weight'].shape[0]
+                    network = InitialPlacementNetwork(
+                        input_dim=input_dim,
+                        hidden_dim=hidden_dim,
+                        output_dim=54
+                    )
+                    network.load_state_dict(state_dict)
+                    network.eval()
+                    self.initial_placement_network = network
+                    print("Placement network loaded")
+                else:
+                    raise ValueError("Invalid checkpoint format: 'network_state_dict' not found")
         # Create encoder if not already present
         if not hasattr(self, 'placement_encoder'):
             try:
-                from AlphaZero.model.initial_placement_network import InitialPlacementEncoder
+                from AlphaZero.core.initial_placement_network import InitialPlacementEncoder
                 self.placement_encoder = InitialPlacementEncoder()
                 if self.debug:
                     print(f"Initialized placement encoder for agent {self.player_id}")
@@ -133,6 +155,20 @@ class AlphaZeroAgent(Agent):
         
         if self.debug:
             print(f"Initial placement network set for agent {self.player_id}")
+    def initialize_placement_network(self, model_path):
+        """
+        Load the initial placement network from a file
+        
+        Args:
+            model_path: Path to the model file
+        """
+        if hasattr(self, 'initial_placement_network'):
+            self.initial_placement_network.load_state_dict(torch.load(model_path))
+            if self.debug:
+                print(f"Loaded initial placement network from {model_path} for agent {self.player_id}")
+        else:
+            raise ValueError("Initial placement network not set. Use set_initial_placement_network() first.")
+        
     def get_initial_settlement(self, state):
         """Phase‑aware placement method. Uses neural network if available, otherwise falls back to heuristic."""
         # First check if we have a placement network available
